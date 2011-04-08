@@ -23,13 +23,14 @@
 #include "avformat.h"
 #include "riff.h"
 
-#define LXF_PACKET_HEADER_SIZE  60
+#define LXF_MAX_HEADER_SIZE     72
 #define LXF_HEADER_DATA_SIZE    120
 #define LXF_IDENT               "LEITCH\0"
 #define LXF_IDENT_LENGTH        8
 #define LXF_SAMPLERATE          48000
 #define LXF_MAX_AUDIO_PACKET    (8008*15*4) ///< 15-channel 32-bit NTSC audio frame
 #define LXF_AUDIO_PACKET_SEARCH 5 ///< Number of packets to pull at start, looking for audio
+#define LXF_NEWFORMAT_TIMEBASE  720000 ///< Version 1 format uses 720kHz time units
 
 static const AVCodecTag lxf_tags[] = {
     { CODEC_ID_MJPEG,       0 },
@@ -70,8 +71,9 @@ static int check_checksum(const uint8_t *header)
 {
     int x;
     uint32_t sum = 0;
+    const int size = AV_RL32(&header[12]);
 
-    for (x = 0; x < LXF_PACKET_HEADER_SIZE; x += 4)
+    for (x = 0; x < size; x += 4)
         sum += AV_RL32(&header[x]);
 
     return sum;
@@ -115,33 +117,40 @@ static int get_packet_header(AVFormatContext *s, uint8_t *header, uint32_t *form
 {
     AVIOContext   *pb  = s->pb;
     LXFDemuxContext *lxf = s->priv_data;
-    int track_size, samples, ret;
+    int track_size, samples, ret, header_size, version;
     AVStream *st;
 
     //find and read the ident
     if ((ret = sync(s, header)) < 0)
         return ret;
 
+    //read version & header size
+    if ((ret = get_buffer(pb, header + LXF_IDENT_LENGTH, 8)) != 8) {
+        return ret < 0 ? ret : AVERROR_EOF;
+    }
+    header_size = AV_RL32(&header[12]);
+    version =  AV_RL32(&header[8]);
+
     //read the rest of the packet header
-    if ((ret = avio_read(pb, header + LXF_IDENT_LENGTH,
-                          LXF_PACKET_HEADER_SIZE - LXF_IDENT_LENGTH)) !=
-                          LXF_PACKET_HEADER_SIZE - LXF_IDENT_LENGTH) {
+    if ((ret = avio_read(pb, header + LXF_IDENT_LENGTH + 8,
+                          header_size - LXF_IDENT_LENGTH - 8)) !=
+                          header_size - LXF_IDENT_LENGTH - 8) {
         return ret < 0 ? ret : AVERROR_EOF;
     }
 
     if (check_checksum(header))
         av_log(s, AV_LOG_ERROR, "checksum error\n");
 
-    *format = AV_RL32(&header[32]);
-    ret     = AV_RL32(&header[36]);
+    *format = AV_RL32(&header[version ? 40 : 32]);
+    ret     = AV_RL32(&header[version ? 44 : 36]);
 
     //type
     switch (AV_RL32(&header[16])) {
     case 0:
         //video
         //skip VBI data and metadata
-        avio_skip(pb, (int64_t)(uint32_t)AV_RL32(&header[44]) +
-                      (int64_t)(uint32_t)AV_RL32(&header[52]));
+        avio_skip(pb, (int64_t)(uint32_t)AV_RL32(&header[version ? 52 : 44]) +
+                      (int64_t)(uint32_t)AV_RL32(&header[version ? 60 : 52]));
         break;
     case 1:
         //audio
@@ -178,9 +187,13 @@ static int get_packet_header(AVFormatContext *s, uint8_t *header, uint32_t *form
         //for NTSC we have one 8008-sample audio frame per five video frames
         if (lxf->timebase_num) {
             // already got timebase, don't bother again
+        } else if (version) {
+            // new LXF format; always 1/720000
+            lxf->timebase_num = 1;
+            lxf->timebase_denom = LXF_NEWFORMAT_TIMEBASE;
         } else if (samples == LXF_SAMPLERATE * 5005 / 30000) {
             lxf->timebase_num = 1001; //NTSC
-            lxf->timebase_denom = 30000 * 2; // time base is in fields
+            lxf->timebase_denom = 30000 * 2; // old time base is in fields
         } else {
             //assume PAL, but warn if we don't have 1920 samples
             if (samples != LXF_SAMPLERATE / 25)
@@ -188,7 +201,7 @@ static int get_packet_header(AVFormatContext *s, uint8_t *header, uint32_t *form
                        "video doesn't seem to be PAL or NTSC. guessing PAL\n");
 
             lxf->timebase_num = 1;
-            lxf->timebase_denom = 25 * 2; //  time base is in fields
+            lxf->timebase_denom = 25 * 2; //  old time base is in fields
         }
 
         //TODO: warning if track mask != (1 << channels) - 1?
@@ -206,16 +219,17 @@ static int lxf_read_header(AVFormatContext *s, AVFormatParameters *ap)
 {
     LXFDemuxContext *lxf = s->priv_data;
     AVIOContext   *pb  = s->pb;
-    uint8_t header[LXF_PACKET_HEADER_SIZE], header_data[LXF_HEADER_DATA_SIZE];
+    uint8_t header[LXF_MAX_HEADER_SIZE], header_data[LXF_HEADER_DATA_SIZE];
     int ret, packets_read = 0;
     unsigned int stream;
     AVStream *st;
-    uint32_t format, video_params, disk_params;
+    uint32_t format, video_params, disk_params, header_version;
     uint16_t record_date, expiration_date;
     int64_t header_end_pos;
 
     if ((ret = get_packet_header(s, header, &format)) < 0)
         return ret;
+    header_version = AV_RL32(&header[8]);
 
     if (ret != LXF_HEADER_DATA_SIZE) {
         av_log(s, AV_LOG_ERROR, "expected %d B size header, got %d\n",
@@ -229,8 +243,8 @@ static int lxf_read_header(AVFormatContext *s, AVFormatParameters *ap)
     if (!(st = av_new_stream(s, 0)))
         return AVERROR(ENOMEM);
 
-    // duration in segment header is duration of entire clip in fields
-    st->duration          = (int64_t)AV_RL32(&header[28]);
+    // duration in segment header is duration of entire clip
+    st->duration          = header_version ? AV_RL64(&header[32]) : (int64_t)AV_RL32(&header[28]);
 
     video_params          = AV_RL32(&header_data[40]);
     record_date           = AV_RL16(&header_data[56]);
@@ -255,7 +269,7 @@ static int lxf_read_header(AVFormatContext *s, AVFormatParameters *ap)
 
     if (format == 1) {
         //skip extended field data
-        avio_skip(s->pb, (uint32_t)AV_RL32(&header[40]));
+        avio_skip(s->pb, (uint32_t)AV_RL32(&header[header_version ? 48 : 40]));
     }
 
     lxf->timebase_num = 0; // No time base found yet
@@ -276,7 +290,7 @@ static int lxf_read_header(AVFormatContext *s, AVFormatParameters *ap)
                AV_RL32(&header[16]) != 1) {
             if ((ret = get_packet_header(s, header, &format)) < 0)
                 break;
-            avio_skip(s->pb, ret); // skip over content
+            avio_skip(s->pb, ret); // skip over packet content
         }
 
         // Set audio bit rate, if we found an audio packet
@@ -289,7 +303,15 @@ static int lxf_read_header(AVFormatContext *s, AVFormatParameters *ap)
     // Fallback in case we didn't find an audio packet.
     if (!lxf->timebase_num) {
         lxf->timebase_num = 1;
-        lxf->timebase_denom = 50; // Arbitrary PAL field rate
+        if (header_version) {
+            // No audio packet necessary to determine time base: new LXF format
+            // time base is fixed
+            lxf->timebase_denom = LXF_NEWFORMAT_TIMEBASE;
+        } else {
+            av_log(s, AV_LOG_WARNING,
+                   "can't find audio packet to determine video frame rate. guessing PAL\n");
+            lxf->timebase_denom = 50; // Arbitrary PAL field rate
+        }
     }
 
     // Set the same timebase on all streams.
@@ -320,13 +342,14 @@ static int lxf_read_packet(AVFormatContext *s, AVPacket *pkt)
 {
     LXFDemuxContext *lxf = s->priv_data;
     AVIOContext   *pb  = s->pb;
-    uint8_t header[LXF_PACKET_HEADER_SIZE], *buf;
+    uint8_t header[LXF_MAX_HEADER_SIZE], *buf;
     AVStream *ast = NULL;
     uint32_t stream, format;
-    int ret, ret2;
+    int ret, ret2, version;
 
     if ((ret = get_packet_header(s, header, &format)) < 0)
         return ret;
+    version = AV_RL32(&header[8]);
 
     stream = AV_RL32(&header[16]);
 
@@ -370,8 +393,8 @@ static int lxf_read_packet(AVFormatContext *s, AVPacket *pkt)
 
     }
 
-    pkt->dts      = (int64_t)AV_RL32(&header[24]);
-    pkt->duration = (int64_t)AV_RL32(&header[28]);
+    pkt->dts      = version ? AV_RL64(&header[24]) : (int64_t)AV_RL32(&header[24]);
+    pkt->duration = version ? AV_RL64(&header[32]) : (int64_t)AV_RL32(&header[28]);
 
     return ret;
 }
