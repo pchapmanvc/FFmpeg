@@ -220,7 +220,10 @@ static int lxf_read_header(AVFormatContext *s, AVFormatParameters *ap)
     if (!(st = av_new_stream(s, 0)))
         return AVERROR(ENOMEM);
 
-    st->duration          = AV_RL32(&header_data[32]);
+    // duration in segment header is duration of entire clip in fields, we are
+    // specifying duration in frames
+    st->duration          = (int64_t)AV_RL32(&header[28]) / 2;
+
     video_params          = AV_RL32(&header_data[40]);
     record_date           = AV_RL16(&header_data[56]);
     expiration_date       = AV_RL16(&header_data[58]);
