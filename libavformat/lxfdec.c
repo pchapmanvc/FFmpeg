@@ -346,11 +346,13 @@ static int lxf_read_packet(AVFormatContext *s, AVPacket *pkt)
     AVStream *ast = NULL;
     uint32_t stream, format;
     int ret, ret2, version;
+    int64_t pos;
 
     if ((ret = get_packet_header(s, header, &format)) < 0)
         return ret;
     version = AV_RL32(&header[8]);
 
+    pos = avio_tell(pb) - AV_RL32(&header[12]);
     stream = AV_RL32(&header[16]);
 
     if (stream > 1) {
@@ -381,6 +383,7 @@ static int lxf_read_packet(AVFormatContext *s, AVPacket *pkt)
         return ret2 < 0 ? ret2 : AVERROR_EOF;
     }
 
+    pkt->pos = pos;
     pkt->stream_index = stream;
 
     if (ast) {
