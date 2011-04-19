@@ -264,8 +264,12 @@ static int gxf_header(AVFormatContext *s, AVFormatParameters *ap) {
     int map_len;
     int len;
     AVRational main_timebase = {0, 0};
-    struct gxf_stream_info si;
+    struct gxf_stream_info *si;
     int i;
+    
+    si = av_mallocz(sizeof(struct gxf_stream_info));
+    s->priv_data = si;
+    
     if (!parse_packet_header(pb, &pkt_type, &map_len) || pkt_type != PKT_MAP) {
         av_log(s, AV_LOG_ERROR, "map packet not found\n");
         return 0;
@@ -282,7 +286,7 @@ static int gxf_header(AVFormatContext *s, AVFormatParameters *ap) {
         return 0;
     }
     map_len -= len;
-    gxf_material_tags(pb, &len, &si);
+    gxf_material_tags(pb, &len, si);
     avio_skip(pb, len);
     map_len -= 2;
     len = avio_rb16(pb); // length of track description
@@ -300,7 +304,7 @@ static int gxf_header(AVFormatContext *s, AVFormatParameters *ap) {
         track_id = avio_r8(pb);
         track_len = avio_rb16(pb);
         len -= track_len;
-        gxf_track_tags(pb, &track_len, &si);
+        gxf_track_tags(pb, &track_len, si);
         avio_skip(pb, track_len);
         if (!(track_type & 0x80)) {
            av_log(s, AV_LOG_ERROR, "invalid track type %x\n", track_type);
@@ -316,12 +320,12 @@ static int gxf_header(AVFormatContext *s, AVFormatParameters *ap) {
         if (idx < 0) continue;
         st = s->streams[idx];
         if (!main_timebase.num || !main_timebase.den) {
-            main_timebase.num = si.frames_per_second.den;
-            main_timebase.den = si.frames_per_second.num * 2;
+            main_timebase.num = si->frames_per_second.den;
+            main_timebase.den = si->frames_per_second.num * 2;
         }
-        st->start_time = si.first_field;
-        if (si.first_field != AV_NOPTS_VALUE && si.last_field != AV_NOPTS_VALUE)
-            st->duration = si.last_field - si.first_field;
+        st->start_time = si->first_field;
+        if (si->first_field != AV_NOPTS_VALUE && si->last_field != AV_NOPTS_VALUE)
+            st->duration = si->last_field - si->first_field;
     }
     if (len < 0)
         av_log(s, AV_LOG_ERROR, "invalid track description length specified\n");
