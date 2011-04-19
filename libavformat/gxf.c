@@ -24,11 +24,22 @@
 #include "internal.h"
 #include "gxf.h"
 
+#define GXF_MAX_PCM_INTERLEAVE 16
+#define GXF_PCM16 0
+#define GXF_PCM24 1
+
+struct gxf_pcm_interleave
+{
+    uint8_t num_tracks;
+    uint8_t track_id[GXF_MAX_PCM_INTERLEAVE];
+};
+
 struct gxf_stream_info {
     int64_t first_field;
     int64_t last_field;
     AVRational frames_per_second;
     int32_t fields_per_frame;
+    struct gxf_pcm_interleave pcm_interleave[2];
 };
 
 /**
@@ -69,6 +80,24 @@ static int gxf_probe(AVProbeData *p) {
     return 0;
 }
 
+static struct gxf_pcm_interleave *pcm_chans_fmt(AVFormatContext *s, int format) {
+    struct gxf_stream_info *si = s->priv_data;
+    switch (format) {
+        case 9:  return &si->pcm_interleave[GXF_PCM24];
+        case 10: return &si->pcm_interleave[GXF_PCM16];
+    }
+    return NULL;
+}
+
+static struct gxf_pcm_interleave *pcm_chans_codec(AVFormatContext *s, int codec) {
+    struct gxf_stream_info *si = s->priv_data;
+    switch (codec) {
+        case CODEC_ID_PCM_S24LE: return &si->pcm_interleave[GXF_PCM24];
+        case CODEC_ID_PCM_S16LE: return &si->pcm_interleave[GXF_PCM16];
+    }
+    return NULL;
+}
+
 /**
  * \brief gets the stream index for the track with the specified id, creates new
  *        stream if not found
@@ -78,6 +107,37 @@ static int gxf_probe(AVProbeData *p) {
 static int get_sindex(AVFormatContext *s, int id, int format) {
     int i;
     AVStream *st = NULL;
+    struct gxf_pcm_interleave *pcm = pcm_chans_fmt(s, format);
+    
+    if (pcm) {
+        // Check for a PCM audio stream which we've seen before
+        for (i = 0; i < pcm->num_tracks && pcm->track_id[i] != id; ++i);
+        
+        if (i < pcm->num_tracks) {
+            // seen track before; return index of 0th stream.
+            id = pcm->track_id[0];
+        } else {
+            // not seen this track before 
+            if (pcm->num_tracks >= GXF_MAX_PCM_INTERLEAVE) {
+                av_log(s, AV_LOG_WARNING,
+                       "Can't interleave more than %d PCM streams\n",
+                       (int)GXF_MAX_PCM_INTERLEAVE);
+            } else {
+                pcm->track_id[pcm->num_tracks++] = id;
+                id = pcm->track_id[0];
+                // Only the 0th PCM stream has an AVStream; the rest share it.
+                if ((i = ff_find_stream_index(s, id)) >= 0) {
+                    st = s->streams[i]; // use existing AVStream...
+                    // ... but update for an additional channel:
+                    st->codec->block_align = (format == 9 ? 3 : 2) *
+                                             ++st->codec->channels;
+                    st->codec->bit_rate = st->codec->block_align * 48000 * 8;
+                    return i;
+                }
+            }
+        }
+    }
+    
     i = ff_find_stream_index(s, id);
     if (i >= 0)
         return i;
@@ -426,11 +486,17 @@ static int gxf_packet(AVFormatContext *s, AVPacket *pkt) {
     AVIOContext *pb = s->pb;
     GXFPktType pkt_type;
     int pkt_len;
+    int channels_read = 0; // bitmask for PCM audio channels read so far
+
+    pkt->data = NULL;
     while (!url_feof(pb)) {
         AVStream *st;
         int track_type, track_id, ret;
         int field_nr, field_info, skip = 0;
         int stream_index;
+        int64_t pkt_start = avio_tell(pb);
+        int read_again = 0;
+        
         if (!parse_packet_header(pb, &pkt_type, &pkt_len)) {
             if (!url_feof(pb))
                 av_log(s, AV_LOG_ERROR, "sync lost\n");
@@ -454,6 +520,15 @@ static int gxf_packet(AVFormatContext *s, AVPacket *pkt) {
         stream_index = get_sindex(s, track_id, track_type);
         if (stream_index < 0)
             return stream_index;
+
+        if (pkt->data && pkt->stream_index != stream_index)
+        {
+            // We have a part-filled PCM audio AVPacket but encountered a
+            // different type of GXF packet. Hopefully a rare case: return what
+            // we have so far (some channels will be silent)
+            avio_seek(pb, pkt_start, SEEK_SET);
+            return 0;
+        }
         st = s->streams[stream_index];
         field_nr = avio_rb32(pb);
         field_info = avio_rb32(pb);
@@ -465,21 +540,88 @@ static int gxf_packet(AVFormatContext *s, AVPacket *pkt) {
             int first = field_info >> 16;
             int last  = field_info & 0xffff; // last is exclusive
             int bps = av_get_bits_per_sample(st->codec->codec_id)>>3;
+            int chan = 0, i;
+            unsigned char *in, *tmpbuf = 0, *inend, *out;
+            struct gxf_pcm_interleave *pcm;
+            
+            pcm = pcm_chans_codec(s, st->codec->codec_id);
+            // which interleaved audio channel does this packet correspond to?
+            for (i = 0; i < pcm->num_tracks; ++i) {
+                if (pcm->track_id[i] == track_id) {
+                    chan = i;
+                    break;
+                }
+            }
+                
             if (first <= last && last*bps <= pkt_len) {
                 avio_skip(pb, first*bps);
                 skip = pkt_len - last*bps;
                 pkt_len = (last-first)*bps;
             } else
                 av_log(s, AV_LOG_ERROR, "invalid first and last sample values\n");
+            
+            if (!pkt->data) {
+                // 1st PCM packet in a group. Allocate AVPacket buffer
+                ret= av_new_packet(pkt, pkt_len * st->codec->channels);
+                if(ret<0)
+                    return ret;
+                pkt->pos= avio_tell(pb);
+            }
+            
+            if (pkt_len != pkt->size / st->codec->channels) {
+                av_log(s, AV_LOG_WARNING,
+                       "Interleaving audio packets of differing size\n");
+                // play it safe
+                pkt_len = FFMIN(pkt_len, pkt->size / st->codec->channels);
+            }
+            
+            if (st->codec->channels > 1) {
+                int buffer_size = pkt_len + FF_INPUT_BUFFER_PADDING_SIZE;
+                if (!(in = tmpbuf = av_mallocz(buffer_size))) {
+                    ret = AVERROR(ENOMEM);
+                    goto fail;
+                }
+            } else {
+                in = pkt->data; // mono PCM: read straight into AVPacket buffer
+            }
+            
+            if ((ret = avio_read(pb, in, pkt_len)) < 0)
+                goto fail;
+
+            if (tmpbuf) {
+                // interleave samples
+                inend = in + ret;
+                out = &pkt->data[bps*chan];
+                for (; in < inend; out += bps*st->codec->channels, in += bps)
+                    for (i = 0; i < bps; ++i)
+                        out[i] = in[i];
+            }
+            channels_read = channels_read | (1 << chan);
+            read_again = channels_read != ((1<<st->codec->channels)-1);
+            ret = 0;
+
+fail:
+            if (tmpbuf)
+                av_free(tmpbuf);
+            if (ret < 0) {
+                if (pkt->data)
+                    av_free_packet(pkt);
+                return ret;
+            }
         }
-        ret = av_get_packet(pb, pkt, pkt_len);
+        else
+        {
+            ret = av_get_packet(pb, pkt, pkt_len);
+        }
         if (skip)
             avio_skip(pb, skip);
         pkt->stream_index = stream_index;
         pkt->dts = field_nr;
-        return ret;
+        if (!read_again)
+            return ret;
     }
-    return AVERROR(EIO);
+    return pkt->data ? 0 // We have a (partial) packet - return that
+                     : AVERROR(EIO);
 }
 
 static int gxf_seek(AVFormatContext *s, int stream_index, int64_t timestamp, int flags) {
