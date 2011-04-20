@@ -150,6 +150,8 @@ static int get_sindex(AVFormatContext *s, int id, int format) {
             st->codec->codec_type = AVMEDIA_TYPE_VIDEO;
             st->codec->codec_id = CODEC_ID_MJPEG;
             break;
+        case 25:
+            st->codec->codec_tag = MKTAG('d', 'v', 'h', '1'); // fall through
         case 13:
         case 15:
             st->codec->codec_type = AVMEDIA_TYPE_VIDEO;
