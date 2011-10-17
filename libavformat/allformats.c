@@ -51,6 +51,8 @@ void av_register_all(void)
     REGISTER_MUXER    (A64, a64);
     REGISTER_DEMUXER  (AAC, aac);
     REGISTER_MUXDEMUX (AC3, ac3);
+    REGISTER_DEMUXER  (ACT, act);
+    REGISTER_DEMUXER  (ADF, adf);
     REGISTER_MUXER    (ADTS, adts);
     REGISTER_DEMUXER  (AEA, aea);
     REGISTER_MUXDEMUX (AIFF, aiff);
@@ -69,9 +71,11 @@ void av_register_all(void)
     REGISTER_DEMUXER  (AVS, avs);
     REGISTER_DEMUXER  (BETHSOFTVID, bethsoftvid);
     REGISTER_DEMUXER  (BFI, bfi);
+    REGISTER_DEMUXER  (BINTEXT, bintext);
     REGISTER_DEMUXER  (BINK, bink);
+    REGISTER_MUXDEMUX (BIT, bit);
     REGISTER_DEMUXER  (C93, c93);
-    REGISTER_DEMUXER  (CAF, caf);
+    REGISTER_MUXDEMUX (CAF, caf);
     REGISTER_MUXDEMUX (CAVSVIDEO, cavsvideo);
     REGISTER_DEMUXER  (CDG, cdg);
     REGISTER_MUXER    (CRC, crc);
@@ -96,6 +100,7 @@ void av_register_all(void)
     REGISTER_MUXER    (FRAMECRC, framecrc);
     REGISTER_MUXER    (FRAMEMD5, framemd5);
     REGISTER_MUXDEMUX (G722, g722);
+    REGISTER_MUXDEMUX (G723_1, g723_1);
     REGISTER_MUXER    (GIF, gif);
     REGISTER_DEMUXER  (GSM, gsm);
     REGISTER_MUXDEMUX (GXF, gxf);
@@ -103,6 +108,7 @@ void av_register_all(void)
     REGISTER_MUXDEMUX (H263, h263);
     REGISTER_MUXDEMUX (H264, h264);
     REGISTER_DEMUXER  (IDCIN, idcin);
+    REGISTER_DEMUXER  (IDF, idf);
     REGISTER_DEMUXER  (IFF, iff);
     REGISTER_MUXDEMUX (IMAGE2, image2);
     REGISTER_MUXDEMUX (IMAGE2PIPE, image2pipe);
@@ -113,7 +119,9 @@ void av_register_all(void)
     REGISTER_DEMUXER  (IV8, iv8);
     REGISTER_MUXDEMUX (IVF, ivf);
     REGISTER_DEMUXER  (JV, jv);
+    REGISTER_MUXDEMUX (LATM, latm);
     REGISTER_DEMUXER  (LMLM4, lmlm4);
+    REGISTER_DEMUXER  (LOAS, loas);
     REGISTER_DEMUXER  (LXF, lxf);
     REGISTER_MUXDEMUX (M4V, m4v);
     REGISTER_MUXER    (MD5, md5);
@@ -224,14 +232,19 @@ void av_register_all(void)
     REGISTER_MUXER    (WEBM, webm);
     REGISTER_DEMUXER  (WSAUD, wsaud);
     REGISTER_DEMUXER  (WSVQA, wsvqa);
-    REGISTER_DEMUXER  (WTV, wtv);
+    REGISTER_MUXDEMUX (WTV, wtv);
     REGISTER_DEMUXER  (WV, wv);
     REGISTER_DEMUXER  (XA, xa);
+    REGISTER_DEMUXER  (XBIN, xbin);
+    REGISTER_DEMUXER  (XMV, xmv);
     REGISTER_DEMUXER  (XWMA, xwma);
     REGISTER_DEMUXER  (YOP, yop);
     REGISTER_MUXDEMUX (YUV4MPEGPIPE, yuv4mpegpipe);
 
     /* external libraries */
+#if CONFIG_LIBMODPLUG
+    REGISTER_DEMUXER  (LIBMODPLUG, libmodplug);
+#endif
     REGISTER_MUXDEMUX (LIBNUT, libnut);
 
     /* protocols */

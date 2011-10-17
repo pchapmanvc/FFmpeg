@@ -109,7 +109,7 @@ typedef struct MOVStreamContext {
     unsigned int keyframe_count;
     int *keyframes;
     int time_scale;
-    int time_offset;      ///< time offset of the first edit list entry
+    int64_t time_offset;  ///< time offset of the first edit list entry
     int current_sample;
     unsigned int bytes_per_frame;
     unsigned int samples_per_frame;
@@ -146,6 +146,7 @@ typedef struct MOVContext {
 int ff_mp4_read_descr_len(AVIOContext *pb);
 int ff_mp4_read_descr(AVFormatContext *fc, AVIOContext *pb, int *tag);
 int ff_mp4_read_dec_config_descr(AVFormatContext *fc, AVStream *st, AVIOContext *pb);
+void ff_mp4_parse_es_descr(AVIOContext *pb, int *es_id);
 
 #define MP4IODescrTag                   0x02
 #define MP4ESDescrTag                   0x03
@@ -157,5 +158,6 @@ enum CodecID ff_mov_get_lpcm_codec_id(int bps, int flags);
 
 int ff_mov_read_stsd_entries(MOVContext *c, AVIOContext *pb, int entries);
 void ff_mov_read_chan(AVFormatContext *s, int64_t size, AVCodecContext *codec);
+void ff_mov_write_chan(AVIOContext *pb, int64_t channel_layout);
 
 #endif /* AVFORMAT_ISOM_H */

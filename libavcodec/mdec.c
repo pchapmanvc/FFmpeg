@@ -126,7 +126,8 @@ static inline int decode_mb(MDECContext *a, DCTELEM block[6][64]){
     a->dsp.clear_blocks(block[0]);
 
     for(i=0; i<6; i++){
-        if( mdec_decode_block_intra(a, block[ block_index[i] ], block_index[i]) < 0)
+        if( mdec_decode_block_intra(a, block[ block_index[i] ], block_index[i]) < 0 ||
+            get_bits_left(&a->gb) < 0)
             return -1;
     }
     return 0;
@@ -170,7 +171,7 @@ static int decode_frame(AVCodecContext *avctx,
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         return -1;
     }
-    p->pict_type= FF_I_TYPE;
+    p->pict_type= AV_PICTURE_TYPE_I;
     p->key_frame= 1;
 
     av_fast_malloc(&a->bitstream_buffer, &a->bitstream_buffer_size, buf_size + FF_INPUT_BUFFER_PADDING_SIZE);
@@ -218,6 +219,7 @@ static av_cold void mdec_common_init(AVCodecContext *avctx){
     a->mb_width   = (avctx->coded_width  + 15) / 16;
     a->mb_height  = (avctx->coded_height + 15) / 16;
 
+    avcodec_get_frame_defaults(&a->picture);
     avctx->coded_frame= &a->picture;
     a->avctx= avctx;
 }
@@ -251,6 +253,7 @@ static av_cold int decode_init_thread_copy(AVCodecContext *avctx){
     return 0;
 }
 
+
 static av_cold int decode_end(AVCodecContext *avctx){
     MDECContext * const a = avctx->priv_data;
 
@@ -264,15 +267,14 @@ static av_cold int decode_end(AVCodecContext *avctx){
 }
 
 AVCodec ff_mdec_decoder = {
-    "mdec",
-    AVMEDIA_TYPE_VIDEO,
-    CODEC_ID_MDEC,
-    sizeof(MDECContext),
-    decode_init,
-    NULL,
-    decode_end,
-    decode_frame,
-    CODEC_CAP_DR1 | CODEC_CAP_FRAME_THREADS,
+    .name           = "mdec",
+    .type           = AVMEDIA_TYPE_VIDEO,
+    .id             = CODEC_ID_MDEC,
+    .priv_data_size = sizeof(MDECContext),
+    .init           = decode_init,
+    .close          = decode_end,
+    .decode         = decode_frame,
+    .capabilities   = CODEC_CAP_DR1 | CODEC_CAP_FRAME_THREADS,
     .long_name= NULL_IF_CONFIG_SMALL("Sony PlayStation MDEC (Motion DECoder)"),
     .init_thread_copy= ONLY_IF_THREADS_ENABLED(decode_init_thread_copy)
 };

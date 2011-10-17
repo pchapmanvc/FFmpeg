@@ -264,7 +264,7 @@ static int mpc8_read_packet(AVFormatContext *s, AVPacket *pkt)
             return AVERROR(EIO);
         mpc8_handle_chunk(s, tag, pos, size);
     }
-    return 0;
+    return AVERROR_EOF;
 }
 
 static int mpc8_read_seek(AVFormatContext *s, int stream_index, int64_t timestamp, int flags)
@@ -274,19 +274,19 @@ static int mpc8_read_seek(AVFormatContext *s, int stream_index, int64_t timestam
     int index = av_index_search_timestamp(st, timestamp, flags);
 
     if(index < 0) return -1;
-    avio_seek(s->pb, st->index_entries[index].pos, SEEK_SET);
+    if (avio_seek(s->pb, st->index_entries[index].pos, SEEK_SET) < 0)
+        return -1;
     c->frame = st->index_entries[index].timestamp;
     return 0;
 }
 
 
 AVInputFormat ff_mpc8_demuxer = {
-    "mpc8",
-    NULL_IF_CONFIG_SMALL("Musepack SV8"),
-    sizeof(MPCContext),
-    mpc8_probe,
-    mpc8_read_header,
-    mpc8_read_packet,
-    NULL,
-    mpc8_read_seek,
+    .name           = "mpc8",
+    .long_name      = NULL_IF_CONFIG_SMALL("Musepack SV8"),
+    .priv_data_size = sizeof(MPCContext),
+    .read_probe     = mpc8_probe,
+    .read_header    = mpc8_read_header,
+    .read_packet    = mpc8_read_packet,
+    .read_seek      = mpc8_read_seek,
 };

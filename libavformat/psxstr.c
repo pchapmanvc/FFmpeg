@@ -68,6 +68,8 @@ static const char sync_header[12] = {0x00,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xf
 static int str_probe(AVProbeData *p)
 {
     uint8_t *sector= p->buf;
+    uint8_t *end= sector + p->buf_size;
+    int aud=0, vid=0;
 
     if (p->buf_size < RAW_CD_SECTOR_SIZE)
         return 0;
@@ -79,20 +81,52 @@ static int str_probe(AVProbeData *p)
         sector += RIFF_HEADER_SIZE;
     }
 
-    /* look for CD sync header (00, 0xFF x 10, 00) */
-    if (memcmp(sector,sync_header,sizeof(sync_header)))
-        return 0;
+    while (end - sector >= RAW_CD_SECTOR_SIZE) {
+        /* look for CD sync header (00, 0xFF x 10, 00) */
+        if (memcmp(sector,sync_header,sizeof(sync_header)))
+            return 0;
 
-    if(sector[0x11] >= 32)
-        return 0;
-    if(   (sector[0x12] & CDXA_TYPE_MASK) != CDXA_TYPE_VIDEO
-       && (sector[0x12] & CDXA_TYPE_MASK) != CDXA_TYPE_AUDIO
-       && (sector[0x12] & CDXA_TYPE_MASK) != CDXA_TYPE_DATA)
-        return 0;
+        if (sector[0x11] >= 32)
+            return 0;
 
+        switch (sector[0x12] & CDXA_TYPE_MASK) {
+        case CDXA_TYPE_DATA:
+        case CDXA_TYPE_VIDEO: {
+                int current_sector = AV_RL16(&sector[0x1C]);
+                int sector_count   = AV_RL16(&sector[0x1E]);
+                int frame_size = AV_RL32(&sector[0x24]);
+
+                if(!(   frame_size>=0
+                     && current_sector < sector_count
+                     && sector_count*VIDEO_DATA_CHUNK_SIZE >=frame_size)){
+                    return 0;
+                }
+
+                /*st->codec->width      = AV_RL16(&sector[0x28]);
+                st->codec->height     = AV_RL16(&sector[0x2A]);*/
+
+//                 if (current_sector == sector_count-1) {
+                    vid++;
+//                 }
+
+            }
+            break;
+        case CDXA_TYPE_AUDIO:
+            if(sector[0x13]&0x2A)
+                return 0;
+            aud++;
+            break;
+        default:
+            if(sector[0x12] & CDXA_TYPE_MASK)
+                return 0;
+        }
+        sector += RAW_CD_SECTOR_SIZE;
+    }
     /* MPEG files (like those ripped from VCDs) can also look like this;
      * only return half certainty */
-    return 50;
+    if(vid+aud > 3)  return 50;
+    else if(vid+aud) return 1;
+    else             return 0;
 }
 
 static int str_read_header(AVFormatContext *s,
@@ -234,7 +268,6 @@ static int str_read_packet(AVFormatContext *s,
             pkt->stream_index =
                 str->channels[channel].audio_stream_index;
             return 0;
-            break;
         default:
             av_log(s, AV_LOG_WARNING, "Unknown sector type %02X\n", sector[0x12]);
             /* drop the sector and move on */
@@ -259,11 +292,11 @@ static int str_read_close(AVFormatContext *s)
 }
 
 AVInputFormat ff_str_demuxer = {
-    "psxstr",
-    NULL_IF_CONFIG_SMALL("Sony Playstation STR format"),
-    sizeof(StrDemuxContext),
-    str_probe,
-    str_read_header,
-    str_read_packet,
-    str_read_close,
+    .name           = "psxstr",
+    .long_name      = NULL_IF_CONFIG_SMALL("Sony Playstation STR format"),
+    .priv_data_size = sizeof(StrDemuxContext),
+    .read_probe     = str_probe,
+    .read_header    = str_read_header,
+    .read_packet    = str_read_packet,
+    .read_close     = str_read_close,
 };

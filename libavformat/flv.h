@@ -1,5 +1,4 @@
-/**
- * @file
+/*
  * FLV common header
  *
  * Copyright (c) 2006 The FFmpeg Project
@@ -19,6 +18,11 @@
  * You should have received a copy of the GNU Lesser General Public
  * License along with FFmpeg; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
+/**
+ * @file
+ * FLV common header
  */
 
 #ifndef AVFORMAT_FLV_H
@@ -59,6 +63,12 @@ enum {
 };
 
 enum {
+    FLV_STREAM_TYPE_VIDEO,
+    FLV_STREAM_TYPE_AUDIO,
+    FLV_STREAM_TYPE_DATA,
+};
+
+enum {
     FLV_MONO   = 0,
     FLV_STEREO = 1,
 };
@@ -94,6 +104,8 @@ enum {
     FLV_CODECID_VP6A    = 5,
     FLV_CODECID_SCREEN2 = 6,
     FLV_CODECID_H264    = 7,
+    FLV_CODECID_REALH263= 8,
+    FLV_CODECID_MPEG4   = 9,
 };
 
 enum {

@@ -23,6 +23,7 @@
 
 #include <math.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "libavutil/mathematics.h"
 #include "avcodec.h"
@@ -461,7 +462,7 @@ static void decode_frame(SiprContext *ctx, SiprParameters *params,
         memcpy(ctx->postfilter_syn5k0, ctx->postfilter_syn5k0 + frame_size,
                LP_FILTER_ORDER*sizeof(float));
     }
-    memcpy(ctx->excitation, excitation - PITCH_DELAY_MAX - L_INTERPOL,
+    memmove(ctx->excitation, excitation - PITCH_DELAY_MAX - L_INTERPOL,
            (PITCH_DELAY_MAX + L_INTERPOL) * sizeof(float));
 
     ff_acelp_apply_order_2_transfer_function(out_data, synth,
@@ -495,8 +496,6 @@ static av_cold int sipr_decoder_init(AVCodecContext * avctx)
 
     avctx->sample_fmt = AV_SAMPLE_FMT_FLT;
 
-    dsputil_init(&ctx->dsp, avctx);
-
     return 0;
 }
 
@@ -510,7 +509,7 @@ static int sipr_decode_frame(AVCodecContext *avctx, void *datap,
     GetBitContext gb;
     float *data = datap;
     int subframe_size = ctx->mode == MODE_16k ? L_SUBFR_16k : SUBFR_SIZE;
-    int i;
+    int i, out_size;
 
     ctx->avctx = avctx;
     if (avpkt->size < (mode_par->bits_per_frame >> 3)) {
@@ -521,7 +520,11 @@ static int sipr_decode_frame(AVCodecContext *avctx, void *datap,
         *data_size = 0;
         return -1;
     }
-    if (*data_size < subframe_size * mode_par->subframe_count * sizeof(float)) {
+
+    out_size = mode_par->frames_per_packet * subframe_size *
+               mode_par->subframe_count *
+               av_get_bytes_per_sample(avctx->sample_fmt);
+    if (*data_size < out_size) {
         av_log(avctx, AV_LOG_ERROR,
                "Error processing packet: output buffer (%d) too small\n",
                *data_size);
@@ -543,20 +546,17 @@ static int sipr_decode_frame(AVCodecContext *avctx, void *datap,
         data += subframe_size * mode_par->subframe_count;
     }
 
-    *data_size = mode_par->frames_per_packet * subframe_size *
-        mode_par->subframe_count * sizeof(float);
+    *data_size = out_size;
 
     return mode_par->bits_per_frame >> 3;
 }
 
 AVCodec ff_sipr_decoder = {
-    "sipr",
-    AVMEDIA_TYPE_AUDIO,
-    CODEC_ID_SIPR,
-    sizeof(SiprContext),
-    sipr_decoder_init,
-    NULL,
-    NULL,
-    sipr_decode_frame,
+    .name           = "sipr",
+    .type           = AVMEDIA_TYPE_AUDIO,
+    .id             = CODEC_ID_SIPR,
+    .priv_data_size = sizeof(SiprContext),
+    .init           = sipr_decoder_init,
+    .decode         = sipr_decode_frame,
     .long_name = NULL_IF_CONFIG_SMALL("RealAudio SIPR / ACELP.NET"),
 };

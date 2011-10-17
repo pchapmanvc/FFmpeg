@@ -53,6 +53,9 @@ static av_cold int msrle_decode_init(AVCodecContext *avctx)
     s->avctx = avctx;
 
     switch (avctx->bits_per_coded_sample) {
+    case 1:
+        avctx->pix_fmt = PIX_FMT_MONOWHITE;
+        break;
     case 4:
     case 8:
         avctx->pix_fmt = PIX_FMT_PAL8;
@@ -65,6 +68,7 @@ static av_cold int msrle_decode_init(AVCodecContext *avctx)
         return -1;
     }
 
+    avcodec_get_frame_defaults(&s->frame);
     s->frame.data[0] = NULL;
 
     return 0;
@@ -89,7 +93,7 @@ static int msrle_decode_frame(AVCodecContext *avctx,
         return -1;
     }
 
-    if (avctx->bits_per_coded_sample <= 8) {
+    if (avctx->bits_per_coded_sample > 1 && avctx->bits_per_coded_sample <= 8) {
         const uint8_t *pal = av_packet_get_side_data(avpkt, AV_PKT_DATA_PALETTE, NULL);
 
         if (pal) {
@@ -103,7 +107,7 @@ static int msrle_decode_frame(AVCodecContext *avctx,
 
     /* FIXME how to correctly detect RLE ??? */
     if (avctx->height * istride == avpkt->size) { /* assume uncompressed */
-        int linesize = avctx->width * avctx->bits_per_coded_sample / 8;
+        int linesize = (avctx->width * avctx->bits_per_coded_sample + 7) / 8;
         uint8_t *ptr = s->frame.data[0];
         uint8_t *buf = avpkt->data + (avctx->height-1)*istride;
         int i, j;
@@ -145,14 +149,13 @@ static av_cold int msrle_decode_end(AVCodecContext *avctx)
 }
 
 AVCodec ff_msrle_decoder = {
-    "msrle",
-    AVMEDIA_TYPE_VIDEO,
-    CODEC_ID_MSRLE,
-    sizeof(MsrleContext),
-    msrle_decode_init,
-    NULL,
-    msrle_decode_end,
-    msrle_decode_frame,
-    CODEC_CAP_DR1,
+    .name           = "msrle",
+    .type           = AVMEDIA_TYPE_VIDEO,
+    .id             = CODEC_ID_MSRLE,
+    .priv_data_size = sizeof(MsrleContext),
+    .init           = msrle_decode_init,
+    .close          = msrle_decode_end,
+    .decode         = msrle_decode_frame,
+    .capabilities   = CODEC_CAP_DR1,
     .long_name= NULL_IF_CONFIG_SMALL("Microsoft RLE"),
 };

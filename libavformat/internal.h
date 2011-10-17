@@ -26,6 +26,12 @@
 
 #define MAX_URL_SIZE 4096
 
+#ifdef DEBUG
+#    define hex_dump_debug(class, buf, size) av_hex_dump_log(class, AV_LOG_DEBUG, buf, size)
+#else
+#    define hex_dump_debug(class, buf, size)
+#endif
+
 typedef struct AVCodecTag {
     enum CodecID id;
     unsigned int tag;
@@ -100,7 +106,7 @@ uint64_t ff_ntp_time(void);
  */
 int ff_url_join(char *str, int size, const char *proto,
                 const char *authorization, const char *hostname,
-                int port, const char *fmt, ...);
+                int port, const char *fmt, ...) av_printf_format(7, 8);
 
 /**
  * Append the media-specific SDP fragment for the media stream c
@@ -116,10 +122,12 @@ int ff_url_join(char *str, int size, const char *proto,
  * @param dest_type the destination address type, may be NULL
  * @param port the destination port of the media stream, 0 if unknown
  * @param ttl the time to live of the stream, 0 if not multicast
+ * @param fmt the AVFormatContext, which might contain options modifying
+ *            the generated SDP
  */
 void ff_sdp_write_media(char *buff, int size, AVCodecContext *c,
                         const char *dest_addr, const char *dest_type,
-                        int port, int ttl);
+                        int port, int ttl, AVFormatContext *fmt);
 
 /**
  * Write a packet to another muxer than the one the user originally
@@ -147,14 +155,14 @@ void ff_put_v(AVIOContext *bc, uint64_t val);
 
 /**
  * Read a whole line of text from AVIOContext. Stop reading after reaching
- * either a \n, a \0 or EOF. The returned string is always \0 terminated,
+ * either a \\n, a \\0 or EOF. The returned string is always \\0-terminated,
  * and may be truncated if the buffer is too small.
  *
  * @param s the read-only AVIOContext
  * @param buf buffer to store the read line
  * @param maxlen size of the buffer
  * @return the length of the string written in the buffer, not including the
- *         final \0
+ *         final \\0
  */
 int ff_get_line(AVIOContext *s, char *buf, int maxlen);
 
@@ -237,5 +245,10 @@ void ff_make_absolute_url(char *buf, int size, const char *base,
                           const char *rel);
 
 enum CodecID ff_guess_image2_codec(const char *filename);
+
+/**
+ * Convert a date string in ISO8601 format to Unix timestamp.
+ */
+int64_t ff_iso8601_to_unix_time(const char *datestr);
 
 #endif /* AVFORMAT_INTERNAL_H */

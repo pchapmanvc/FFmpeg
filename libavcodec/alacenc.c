@@ -146,7 +146,7 @@ static void calc_predictor_params(AlacEncodeContext *s, int ch)
                                       s->min_prediction_order,
                                       s->max_prediction_order,
                                       ALAC_MAX_LPC_PRECISION, coefs, shift,
-                                      AV_LPC_TYPE_LEVINSON, 0,
+                                      FF_LPC_TYPE_LEVINSON, 0,
                                       ORDER_METHOD_EST, ALAC_MAX_LPC_SHIFT, 1);
 
         s->lpc[ch].lpc_order = opt_order;
@@ -389,6 +389,11 @@ static av_cold int alac_encode_init(AVCodecContext *avctx)
         return -1;
     }
 
+    if(avctx->channels > 2) {
+        av_log(avctx, AV_LOG_ERROR, "channels > 2 not supported\n");
+        return AVERROR_PATCHWELCOME;
+    }
+
     // Set default compression level
     if(avctx->compression_level == FF_COMPRESSION_DEFAULT)
         s->compression_level = 2;
@@ -457,7 +462,7 @@ static av_cold int alac_encode_init(AVCodecContext *avctx)
 
     s->avctx = avctx;
     ret = ff_lpc_init(&s->lpc_ctx, avctx->frame_size, s->max_prediction_order,
-                      AV_LPC_TYPE_LEVINSON);
+                      FF_LPC_TYPE_LEVINSON);
 
     return ret;
 }
@@ -524,13 +529,13 @@ static av_cold int alac_encode_close(AVCodecContext *avctx)
 }
 
 AVCodec ff_alac_encoder = {
-    "alac",
-    AVMEDIA_TYPE_AUDIO,
-    CODEC_ID_ALAC,
-    sizeof(AlacEncodeContext),
-    alac_encode_init,
-    alac_encode_frame,
-    alac_encode_close,
+    .name           = "alac",
+    .type           = AVMEDIA_TYPE_AUDIO,
+    .id             = CODEC_ID_ALAC,
+    .priv_data_size = sizeof(AlacEncodeContext),
+    .init           = alac_encode_init,
+    .encode         = alac_encode_frame,
+    .close          = alac_encode_close,
     .capabilities = CODEC_CAP_SMALL_LAST_FRAME,
     .sample_fmts = (const enum AVSampleFormat[]){ AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_NONE},
     .long_name = NULL_IF_CONFIG_SMALL("ALAC (Apple Lossless Audio Codec)"),

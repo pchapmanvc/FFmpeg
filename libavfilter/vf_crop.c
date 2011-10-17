@@ -30,6 +30,7 @@
 #include "libavutil/avstring.h"
 #include "libavutil/libm.h"
 #include "libavutil/imgutils.h"
+#include "libavutil/mathematics.h"
 
 static const char *var_names[] = {
     "E",
@@ -39,6 +40,11 @@ static const char *var_names[] = {
     "in_h", "ih",   ///< height of the input video
     "out_w", "ow",  ///< width  of the cropped video
     "out_h", "oh",  ///< height of the cropped video
+    "a",
+    "sar",
+    "dar",
+    "hsub",
+    "vsub",
     "x",
     "y",
     "n",            ///< number of frame
@@ -55,6 +61,11 @@ enum var_name {
     VAR_IN_H,  VAR_IH,
     VAR_OUT_W, VAR_OW,
     VAR_OUT_H, VAR_OH,
+    VAR_A,
+    VAR_SAR,
+    VAR_DAR,
+    VAR_HSUB,
+    VAR_VSUB,
     VAR_X,
     VAR_Y,
     VAR_N,
@@ -104,7 +115,7 @@ static int query_formats(AVFilterContext *ctx)
         PIX_FMT_NONE
     };
 
-    avfilter_set_common_formats(ctx, avfilter_make_format_list(pix_fmts));
+    avfilter_set_common_pixel_formats(ctx, avfilter_make_format_list(pix_fmts));
 
     return 0;
 }
@@ -161,6 +172,11 @@ static int config_input(AVFilterLink *link)
     crop->var_values[VAR_PI]    = M_PI;
     crop->var_values[VAR_IN_W]  = crop->var_values[VAR_IW] = ctx->inputs[0]->w;
     crop->var_values[VAR_IN_H]  = crop->var_values[VAR_IH] = ctx->inputs[0]->h;
+    crop->var_values[VAR_A]     = (float) link->w / link->h;
+    crop->var_values[VAR_SAR]   = link->sample_aspect_ratio.num ? av_q2d(link->sample_aspect_ratio) : 1;
+    crop->var_values[VAR_DAR]   = crop->var_values[VAR_A] * crop->var_values[VAR_SAR];
+    crop->var_values[VAR_HSUB]  = 1<<pix_desc->log2_chroma_w;
+    crop->var_values[VAR_VSUB]  = 1<<pix_desc->log2_chroma_h;
     crop->var_values[VAR_X]     = NAN;
     crop->var_values[VAR_Y]     = NAN;
     crop->var_values[VAR_OUT_W] = crop->var_values[VAR_OW] = NAN;
@@ -264,11 +280,9 @@ static void start_frame(AVFilterLink *link, AVFilterBufferRef *picref)
     crop->x &= ~((1 << crop->hsub) - 1);
     crop->y &= ~((1 << crop->vsub) - 1);
 
-#ifdef DEBUG
-    av_log(ctx, AV_LOG_DEBUG,
-           "n:%d t:%f x:%d y:%d x+w:%d y+h:%d\n",
-           (int)crop->var_values[VAR_N], crop->var_values[VAR_T], crop->x, crop->y, crop->x+crop->w, crop->y+crop->h);
-#endif
+    av_dlog(ctx, "n:%d t:%f x:%d y:%d x+w:%d y+h:%d\n",
+            (int)crop->var_values[VAR_N], crop->var_values[VAR_T], crop->x,
+            crop->y, crop->x+crop->w, crop->y+crop->h);
 
     ref2->data[0] += crop->y * ref2->linesize[0];
     ref2->data[0] += crop->x * crop->max_step[0];

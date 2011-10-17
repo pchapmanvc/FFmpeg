@@ -113,6 +113,8 @@ AVIOContext *avio_alloc_context(
                   int64_t (*seek)(void *opaque, int64_t offset, int whence))
 {
     AVIOContext *s = av_mallocz(sizeof(AVIOContext));
+    if (!s)
+        return NULL;
     ffio_init_context(s, buffer, buffer_size, write_flag, opaque,
                   read_packet, write_packet, seek);
     return s;
@@ -845,19 +847,13 @@ int ffio_fdopen(AVIOContext **s, URLContext *h)
     if (!buffer)
         return AVERROR(ENOMEM);
 
-    *s = av_mallocz(sizeof(AVIOContext));
-    if(!*s) {
+    *s = avio_alloc_context(buffer, buffer_size, h->flags & AVIO_FLAG_WRITE, h,
+                            ffurl_read, ffurl_write, ffurl_seek);
+    if (!*s) {
         av_free(buffer);
         return AVERROR(ENOMEM);
     }
 
-    if (ffio_init_context(*s, buffer, buffer_size,
-                      h->flags & AVIO_FLAG_WRITE, h,
-                      (void*)ffurl_read, (void*)ffurl_write, (void*)ffurl_seek) < 0) {
-        av_free(buffer);
-        av_freep(s);
-        return AVERROR(EIO);
-    }
 #if FF_API_OLD_AVIO
     (*s)->is_streamed = h->is_streamed;
 #endif
@@ -919,7 +915,7 @@ int ffio_rewind_with_probe_data(AVIOContext *s, unsigned char *buf, int buf_size
 
     alloc_size = FFMAX(s->buffer_size, new_size);
     if (alloc_size > buf_size)
-        if (!(buf = av_realloc(buf, alloc_size)))
+        if (!(buf = av_realloc_f(buf, 1, alloc_size)))
             return AVERROR(ENOMEM);
 
     if (new_size > buf_size) {
@@ -1088,7 +1084,7 @@ static int dyn_buf_write(void *opaque, uint8_t *buf, int buf_size)
     }
 
     if (new_allocated_size > d->allocated_size) {
-        d->buffer = av_realloc(d->buffer, new_allocated_size);
+        d->buffer = av_realloc_f(d->buffer, 1, new_allocated_size);
         if(d->buffer == NULL)
              return AVERROR(ENOMEM);
         d->allocated_size = new_allocated_size;

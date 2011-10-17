@@ -500,11 +500,11 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *data_size, AVPac
     }
     if(c->flags & ZMBV_KEYFRAME) {
         c->pic.key_frame = 1;
-        c->pic.pict_type = FF_I_TYPE;
+        c->pic.pict_type = AV_PICTURE_TYPE_I;
         c->decode_intra(c);
     } else {
         c->pic.key_frame = 0;
-        c->pic.pict_type = FF_P_TYPE;
+        c->pic.pict_type = AV_PICTURE_TYPE_P;
         if(c->decomp_len)
             c->decode_xor(c);
     }
@@ -574,7 +574,7 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *data_size, AVPac
         default:
             av_log(avctx, AV_LOG_ERROR, "Cannot handle format %i\n", c->fmt);
         }
-        memcpy(c->prev, c->cur, c->width * c->height * (c->bpp / 8));
+        FFSWAP(uint8_t *, c->cur, c->prev);
     }
     *data_size = sizeof(AVFrame);
     *(AVFrame*)data = c->pic;
@@ -599,6 +599,7 @@ static av_cold int decode_init(AVCodecContext *avctx)
 
     c->width = avctx->width;
     c->height = avctx->height;
+    avcodec_get_frame_defaults(&c->pic);
 
     c->bpp = avctx->bits_per_coded_sample;
 
@@ -651,15 +652,14 @@ static av_cold int decode_end(AVCodecContext *avctx)
 }
 
 AVCodec ff_zmbv_decoder = {
-    "zmbv",
-    AVMEDIA_TYPE_VIDEO,
-    CODEC_ID_ZMBV,
-    sizeof(ZmbvContext),
-    decode_init,
-    NULL,
-    decode_end,
-    decode_frame,
-    CODEC_CAP_DR1,
+    .name           = "zmbv",
+    .type           = AVMEDIA_TYPE_VIDEO,
+    .id             = CODEC_ID_ZMBV,
+    .priv_data_size = sizeof(ZmbvContext),
+    .init           = decode_init,
+    .close          = decode_end,
+    .decode         = decode_frame,
+    .capabilities   = CODEC_CAP_DR1,
     .long_name = NULL_IF_CONFIG_SMALL("Zip Motion Blocks Video"),
 };
 

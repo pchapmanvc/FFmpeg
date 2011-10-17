@@ -40,8 +40,8 @@
 #define AV_VERSION(a, b, c) AV_VERSION_DOT(a, b, c)
 
 #define LIBAVUTIL_VERSION_MAJOR 51
-#define LIBAVUTIL_VERSION_MINOR  2
-#define LIBAVUTIL_VERSION_MICRO  0
+#define LIBAVUTIL_VERSION_MINOR 20
+#define LIBAVUTIL_VERSION_MICRO  1
 
 #define LIBAVUTIL_VERSION_INT   AV_VERSION_INT(LIBAVUTIL_VERSION_MAJOR, \
                                                LIBAVUTIL_VERSION_MINOR, \
@@ -59,6 +59,18 @@
  */
 #ifndef FF_API_OLD_EVAL_NAMES
 #define FF_API_OLD_EVAL_NAMES (LIBAVUTIL_VERSION_MAJOR < 52)
+#endif
+#ifndef FF_API_GET_BITS_PER_SAMPLE_FMT
+#define FF_API_GET_BITS_PER_SAMPLE_FMT (LIBAVUTIL_VERSION_MAJOR < 52)
+#endif
+#ifndef FF_API_FIND_OPT
+#define FF_API_FIND_OPT                 (LIBAVUTIL_VERSION_MAJOR < 52)
+#endif
+#ifndef FF_API_AV_FIFO_PEEK
+#define FF_API_AV_FIFO_PEEK             (LIBAVUTIL_VERSION_MAJOR < 52)
+#endif
+#ifndef FF_API_OLD_AVOPTIONS
+#define FF_API_OLD_AVOPTIONS            (LIBAVUTIL_VERSION_MAJOR < 52)
 #endif
 
 /**
@@ -86,6 +98,12 @@ enum AVMediaType {
     AVMEDIA_TYPE_NB
 };
 
+/**
+ * Return a string describing the media_type enum, NULL if media_type
+ * is unknown.
+ */
+const char *av_get_media_type_string(enum AVMediaType media_type);
+
 #define FF_LAMBDA_SHIFT 7
 #define FF_LAMBDA_SCALE (1<<FF_LAMBDA_SHIFT)
 #define FF_QP2LAMBDA 118 ///< factor to convert from H.263 QP to lambda
@@ -98,7 +116,8 @@ enum AVMediaType {
 #define AV_TIME_BASE_Q          (AVRational){1, AV_TIME_BASE}
 
 enum AVPictureType {
-    AV_PICTURE_TYPE_I = 1, ///< Intra
+    AV_PICTURE_TYPE_NONE = 0, ///< Undefined
+    AV_PICTURE_TYPE_I,     ///< Intra
     AV_PICTURE_TYPE_P,     ///< Predicted
     AV_PICTURE_TYPE_B,     ///< Bi-dir predicted
     AV_PICTURE_TYPE_S,     ///< S(GMC)-VOP MPEG4
@@ -115,6 +134,14 @@ enum AVPictureType {
  * representing the picture type, '?' if pict_type is unknown
  */
 char av_get_picture_type_char(enum AVPictureType pict_type);
+
+/**
+ * Return x default pointer in case p is NULL.
+ */
+static inline const void *av_x_if_null(const void *p, const void *x)
+{
+    return p ? p : x;
+}
 
 #include "common.h"
 #include "error.h"

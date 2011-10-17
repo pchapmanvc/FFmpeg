@@ -75,6 +75,8 @@ static int pcm_bluray_parse_header(AVCodecContext *avctx,
     }
     avctx->sample_fmt = avctx->bits_per_coded_sample == 16 ? AV_SAMPLE_FMT_S16 :
                                                              AV_SAMPLE_FMT_S32;
+    if (avctx->sample_fmt == AV_SAMPLE_FMT_S32)
+        avctx->bits_per_raw_sample = avctx->bits_per_coded_sample;
 
     /* get the sample rate. Not all values are known or exist. */
     switch (header[2] & 0x0f) {
@@ -297,14 +299,10 @@ static int pcm_bluray_decode_frame(AVCodecContext *avctx,
 }
 
 AVCodec ff_pcm_bluray_decoder = {
-    "pcm_bluray",
-    AVMEDIA_TYPE_AUDIO,
-    CODEC_ID_PCM_BLURAY,
-    0,
-    NULL,
-    NULL,
-    NULL,
-    pcm_bluray_decode_frame,
+    .name           = "pcm_bluray",
+    .type           = AVMEDIA_TYPE_AUDIO,
+    .id             = CODEC_ID_PCM_BLURAY,
+    .decode         = pcm_bluray_decode_frame,
     .sample_fmts = (const enum AVSampleFormat[]){AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S32,
                                          AV_SAMPLE_FMT_NONE},
     .long_name = NULL_IF_CONFIG_SMALL("PCM signed 16|20|24-bit big-endian for Blu-ray media"),

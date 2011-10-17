@@ -23,6 +23,7 @@
 #define AVUTIL_PIXDESC_H
 
 #include <inttypes.h>
+#include "pixfmt.h"
 
 typedef struct AVComponentDescriptor{
     uint16_t plane        :2;            ///< which of the 4 planes contains the component
@@ -142,6 +143,14 @@ void av_write_image_line(const uint16_t *src, uint8_t *data[4], const int linesi
 enum PixelFormat av_get_pix_fmt(const char *name);
 
 /**
+ * Return the short name for a pixel format, NULL in case pix_fmt is
+ * unknown.
+ *
+ * @see av_get_pix_fmt(), av_get_pix_fmt_string()
+ */
+const char *av_get_pix_fmt_name(enum PixelFormat pix_fmt);
+
+/**
  * Print in buf the string corresponding to the pixel format with
  * number pix_fmt, or an header if pix_fmt is negative.
  *
@@ -162,5 +171,6 @@ char *av_get_pix_fmt_string (char *buf, int buf_size, enum PixelFormat pix_fmt);
  * not counted.
  */
 int av_get_bits_per_pixel(const AVPixFmtDescriptor *pixdesc);
+int av_get_bits_per_pixel2(enum PixelFormat pix_fmt);
 
 #endif /* AVUTIL_PIXDESC_H */

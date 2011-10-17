@@ -827,8 +827,9 @@ static int wma_decode_superframe(AVCodecContext *avctx,
         return 0;
     }
     if (buf_size < s->block_align)
-        return 0;
-    buf_size = s->block_align;
+        return AVERROR(EINVAL);
+    if(s->block_align)
+        buf_size = s->block_align;
 
     samples = data;
 
@@ -911,9 +912,8 @@ static int wma_decode_superframe(AVCodecContext *avctx,
     }
 
 //av_log(NULL, AV_LOG_ERROR, "%d %d %d %d outbytes:%d eaten:%d\n", s->frame_len_bits, s->block_len_bits, s->frame_len, s->block_len,        (int8_t *)samples - (int8_t *)data, s->block_align);
-
     *data_size = (int8_t *)samples - (int8_t *)data;
-    return s->block_align;
+    return buf_size;
  fail:
     /* when error, we reset the bit reservoir */
     s->last_superframe_len = 0;
@@ -928,30 +928,26 @@ static av_cold void flush(AVCodecContext *avctx)
     s->last_superframe_len= 0;
 }
 
-AVCodec ff_wmav1_decoder =
-{
-    "wmav1",
-    AVMEDIA_TYPE_AUDIO,
-    CODEC_ID_WMAV1,
-    sizeof(WMACodecContext),
-    wma_decode_init,
-    NULL,
-    ff_wma_end,
-    wma_decode_superframe,
-    .flush=flush,
-    .long_name = NULL_IF_CONFIG_SMALL("Windows Media Audio 1"),
+AVCodec ff_wmav1_decoder = {
+    .name           = "wmav1",
+    .type           = AVMEDIA_TYPE_AUDIO,
+    .id             = CODEC_ID_WMAV1,
+    .priv_data_size = sizeof(WMACodecContext),
+    .init           = wma_decode_init,
+    .close          = ff_wma_end,
+    .decode         = wma_decode_superframe,
+    .flush          = flush,
+    .long_name      = NULL_IF_CONFIG_SMALL("Windows Media Audio 1"),
 };
 
-AVCodec ff_wmav2_decoder =
-{
-    "wmav2",
-    AVMEDIA_TYPE_AUDIO,
-    CODEC_ID_WMAV2,
-    sizeof(WMACodecContext),
-    wma_decode_init,
-    NULL,
-    ff_wma_end,
-    wma_decode_superframe,
-    .flush=flush,
-    .long_name = NULL_IF_CONFIG_SMALL("Windows Media Audio 2"),
+AVCodec ff_wmav2_decoder = {
+    .name           = "wmav2",
+    .type           = AVMEDIA_TYPE_AUDIO,
+    .id             = CODEC_ID_WMAV2,
+    .priv_data_size = sizeof(WMACodecContext),
+    .init           = wma_decode_init,
+    .close          = ff_wma_end,
+    .decode         = wma_decode_superframe,
+    .flush          = flush,
+    .long_name      = NULL_IF_CONFIG_SMALL("Windows Media Audio 2"),
 };

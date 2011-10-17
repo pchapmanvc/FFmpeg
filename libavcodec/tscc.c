@@ -75,7 +75,6 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *data_size, AVPac
     int buf_size = avpkt->size;
     CamtasiaContext * const c = avctx->priv_data;
     const unsigned char *encoded = buf;
-    unsigned char *outptr;
     int zret; // Zlib return code
     int len = buf_size;
 
@@ -88,8 +87,6 @@ static int decode_frame(AVCodecContext *avctx, void *data, int *data_size, AVPac
         av_log(avctx, AV_LOG_ERROR, "get_buffer() failed\n");
         return -1;
     }
-
-    outptr = c->pic.data[0]; // Output image pointer
 
     zret = inflateReset(&(c->zstream));
     if (zret != Z_OK) {
@@ -145,6 +142,7 @@ static av_cold int decode_init(AVCodecContext *avctx)
 
     c->height = avctx->height;
 
+    avcodec_get_frame_defaults(&c->pic);
     // Needed if zlib unused or init aborted before inflateInit
     memset(&(c->zstream), 0, sizeof(z_stream));
     switch(avctx->bits_per_coded_sample){
@@ -202,15 +200,14 @@ static av_cold int decode_end(AVCodecContext *avctx)
 }
 
 AVCodec ff_tscc_decoder = {
-        "camtasia",
-        AVMEDIA_TYPE_VIDEO,
-        CODEC_ID_TSCC,
-        sizeof(CamtasiaContext),
-        decode_init,
-        NULL,
-        decode_end,
-        decode_frame,
-        CODEC_CAP_DR1,
-        .long_name = NULL_IF_CONFIG_SMALL("TechSmith Screen Capture Codec"),
+    .name           = "camtasia",
+    .type           = AVMEDIA_TYPE_VIDEO,
+    .id             = CODEC_ID_TSCC,
+    .priv_data_size = sizeof(CamtasiaContext),
+    .init           = decode_init,
+    .close          = decode_end,
+    .decode         = decode_frame,
+    .capabilities   = CODEC_CAP_DR1,
+    .long_name      = NULL_IF_CONFIG_SMALL("TechSmith Screen Capture Codec"),
 };
 

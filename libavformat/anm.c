@@ -134,18 +134,17 @@ static int read_header(AVFormatContext *s,
     /* color cycling and palette data */
     st->codec->extradata_size = 16*8 + 4*256;
     st->codec->extradata      = av_mallocz(st->codec->extradata_size + FF_INPUT_BUFFER_PADDING_SIZE);
-    if (!st->codec->extradata) {
-        ret = AVERROR(ENOMEM);
-        goto close_and_return;
-    }
+    if (!st->codec->extradata)
+        return AVERROR(ENOMEM);
+
     ret = avio_read(pb, st->codec->extradata, st->codec->extradata_size);
     if (ret < 0)
-        goto close_and_return;
+        return ret;
 
     /* read page table */
     ret = avio_seek(pb, anm->page_table_offset, SEEK_SET);
     if (ret < 0)
-        goto close_and_return;
+        return ret;
 
     for (i = 0; i < MAX_PAGES; i++) {
         Page *p = &anm->pt[i];
@@ -156,21 +155,15 @@ static int read_header(AVFormatContext *s,
 
     /* find page of first frame */
     anm->page = find_record(anm, 0);
-    if (anm->page < 0) {
-        ret = anm->page;
-        goto close_and_return;
-    }
+    if (anm->page < 0)
+        return anm->page;
 
     anm->record = -1;
     return 0;
 
 invalid:
     av_log_ask_for_sample(s, NULL);
-    ret = AVERROR_INVALIDDATA;
-
-close_and_return:
-    av_close_input_stream(s);
-    return ret;
+    return AVERROR_INVALIDDATA;
 }
 
 static int read_packet(AVFormatContext *s,
@@ -226,10 +219,10 @@ repeat:
 }
 
 AVInputFormat ff_anm_demuxer = {
-    "anm",
-    NULL_IF_CONFIG_SMALL("Deluxe Paint Animation"),
-    sizeof(AnmDemuxContext),
-    probe,
-    read_header,
-    read_packet,
+    .name           = "anm",
+    .long_name      = NULL_IF_CONFIG_SMALL("Deluxe Paint Animation"),
+    .priv_data_size = sizeof(AnmDemuxContext),
+    .read_probe     = probe,
+    .read_header    = read_header,
+    .read_packet    = read_packet,
 };

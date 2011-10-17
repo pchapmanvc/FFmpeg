@@ -143,14 +143,8 @@ void ff_vector_fmul_window_neon(float *dst, const float *src0,
                                 const float *src1, const float *win, int len);
 void ff_vector_fmul_scalar_neon(float *dst, const float *src, float mul,
                                 int len);
-void ff_vector_fmul_sv_scalar_2_neon(float *dst, const float *src,
-                                     const float **vp, float mul, int len);
-void ff_vector_fmul_sv_scalar_4_neon(float *dst, const float *src,
-                                     const float **vp, float mul, int len);
-void ff_sv_fmul_scalar_2_neon(float *dst, const float **vp, float mul,
-                              int len);
-void ff_sv_fmul_scalar_4_neon(float *dst, const float **vp, float mul,
-                              int len);
+void ff_vector_fmac_scalar_neon(float *dst, const float *src, float mul,
+                                int len);
 void ff_butterflies_float_neon(float *v1, float *v2, int len);
 float ff_scalarproduct_float_neon(const float *v1, const float *v2, int len);
 void ff_vector_fmul_reverse_neon(float *dst, const float *src0,
@@ -160,6 +154,8 @@ void ff_vector_fmul_add_neon(float *dst, const float *src0, const float *src1,
 
 void ff_vector_clipf_neon(float *dst, const float *src, float min, float max,
                           int len);
+void ff_vector_clip_int32_neon(int32_t *dst, const int32_t *src, int32_t min,
+                               int32_t max, unsigned int len);
 
 void ff_vorbis_inverse_coupling_neon(float *mag, float *ang, int blocksize);
 
@@ -173,9 +169,9 @@ void ff_apply_window_int16_neon(int16_t *dst, const int16_t *src,
 
 void ff_dsputil_init_neon(DSPContext *c, AVCodecContext *avctx)
 {
-    const int h264_high_depth = avctx->codec_id == CODEC_ID_H264 && avctx->bits_per_raw_sample > 8;
+    const int high_bit_depth = avctx->bits_per_raw_sample > 8;
 
-    if (!avctx->lowres) {
+    if (!avctx->lowres && avctx->bits_per_raw_sample <= 8) {
         if (avctx->idct_algo == FF_IDCT_AUTO ||
             avctx->idct_algo == FF_IDCT_SIMPLENEON) {
             c->idct_put              = ff_simple_idct_put_neon;
@@ -192,7 +188,7 @@ void ff_dsputil_init_neon(DSPContext *c, AVCodecContext *avctx)
         }
     }
 
-    if (!h264_high_depth) {
+    if (!high_bit_depth) {
     c->clear_block  = ff_clear_block_neon;
     c->clear_blocks = ff_clear_blocks_neon;
 
@@ -223,7 +219,7 @@ void ff_dsputil_init_neon(DSPContext *c, AVCodecContext *avctx)
     c->put_signed_pixels_clamped = ff_put_signed_pixels_clamped_neon;
 
     if (CONFIG_H264_DECODER) {
-        if (!h264_high_depth) {
+        if (!high_bit_depth) {
         c->put_h264_chroma_pixels_tab[0] = ff_put_h264_chroma_mc8_neon;
         c->put_h264_chroma_pixels_tab[1] = ff_put_h264_chroma_mc4_neon;
         c->put_h264_chroma_pixels_tab[2] = ff_put_h264_chroma_mc2_neon;
@@ -311,17 +307,13 @@ void ff_dsputil_init_neon(DSPContext *c, AVCodecContext *avctx)
     c->vector_fmul                = ff_vector_fmul_neon;
     c->vector_fmul_window         = ff_vector_fmul_window_neon;
     c->vector_fmul_scalar         = ff_vector_fmul_scalar_neon;
+    c->vector_fmac_scalar         = ff_vector_fmac_scalar_neon;
     c->butterflies_float          = ff_butterflies_float_neon;
     c->scalarproduct_float        = ff_scalarproduct_float_neon;
     c->vector_fmul_reverse        = ff_vector_fmul_reverse_neon;
     c->vector_fmul_add            = ff_vector_fmul_add_neon;
     c->vector_clipf               = ff_vector_clipf_neon;
-
-    c->vector_fmul_sv_scalar[0] = ff_vector_fmul_sv_scalar_2_neon;
-    c->vector_fmul_sv_scalar[1] = ff_vector_fmul_sv_scalar_4_neon;
-
-    c->sv_fmul_scalar[0] = ff_sv_fmul_scalar_2_neon;
-    c->sv_fmul_scalar[1] = ff_sv_fmul_scalar_4_neon;
+    c->vector_clip_int32          = ff_vector_clip_int32_neon;
 
     if (CONFIG_VORBIS_DECODER)
         c->vorbis_inverse_coupling = ff_vorbis_inverse_coupling_neon;

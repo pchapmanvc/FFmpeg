@@ -25,10 +25,11 @@
  * http://tools.ietf.org/html/draft-pantos-http-live-streaming
  */
 
-#define _XOPEN_SOURCE 600
 #include "libavutil/avstring.h"
 #include "libavutil/intreadwrite.h"
+#include "libavutil/mathematics.h"
 #include "libavutil/opt.h"
+#include "libavutil/dict.h"
 #include "avformat.h"
 #include "internal.h"
 #include <unistd.h>
@@ -411,7 +412,7 @@ reload:
     c->end_of_segment = 1;
     c->cur_seq_no = v->cur_seq_no;
 
-    if (v->ctx) {
+    if (v->ctx && v->ctx->nb_streams) {
         v->needed = 0;
         for (i = v->stream_offset; i < v->stream_offset + v->ctx->nb_streams;
              i++) {
@@ -473,6 +474,11 @@ static int applehttp_read_header(AVFormatContext *s, AVFormatParameters *ap)
         if (v->n_segments == 0)
             continue;
 
+        if (!(v->ctx = avformat_alloc_context())) {
+            ret = AVERROR(ENOMEM);
+            goto fail;
+        }
+
         v->index  = i;
         v->needed = 1;
         v->parent = s;
@@ -491,8 +497,8 @@ static int applehttp_read_header(AVFormatContext *s, AVFormatParameters *ap)
                                     NULL, 0, 0);
         if (ret < 0)
             goto fail;
-        ret = av_open_input_stream(&v->ctx, &v->pb, v->segments[0]->url,
-                                   in_fmt, NULL);
+        v->ctx->pb       = &v->pb;
+        ret = avformat_open_input(&v->ctx, v->segments[0]->url, in_fmt, NULL);
         if (ret < 0)
             goto fail;
         v->stream_offset = stream_offset;
@@ -506,7 +512,7 @@ static int applehttp_read_header(AVFormatContext *s, AVFormatParameters *ap)
             }
             avcodec_copy_context(st->codec, v->ctx->streams[j]->codec);
             if (v->bandwidth)
-                av_metadata_set2(&st->metadata, "variant_bitrate", bitrate_str,
+                av_dict_set(&st->metadata, "variant_bitrate", bitrate_str,
                                  0);
         }
         stream_offset += v->ctx->nb_streams;
@@ -662,12 +668,12 @@ static int applehttp_probe(AVProbeData *p)
 }
 
 AVInputFormat ff_applehttp_demuxer = {
-    "applehttp",
-    NULL_IF_CONFIG_SMALL("Apple HTTP Live Streaming format"),
-    sizeof(AppleHTTPContext),
-    applehttp_probe,
-    applehttp_read_header,
-    applehttp_read_packet,
-    applehttp_close,
-    applehttp_read_seek,
+    .name           = "applehttp",
+    .long_name      = NULL_IF_CONFIG_SMALL("Apple HTTP Live Streaming format"),
+    .priv_data_size = sizeof(AppleHTTPContext),
+    .read_probe     = applehttp_probe,
+    .read_header    = applehttp_read_header,
+    .read_packet    = applehttp_read_packet,
+    .read_close     = applehttp_close,
+    .read_seek      = applehttp_read_seek,
 };

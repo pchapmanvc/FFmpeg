@@ -136,6 +136,7 @@ static av_cold int decode_init(AVCodecContext *avctx){
 
     l->avctx = avctx;
     avctx->pix_fmt = PIX_FMT_YUV422P;
+    avcodec_get_frame_defaults(&l->pic);
 
     code_vlc.table = code_table;
     code_vlc.table_allocated = 1 << CODE_VLC_BITS;
@@ -157,14 +158,13 @@ static av_cold int decode_end(AVCodecContext *avctx){
 }
 
 AVCodec ff_wnv1_decoder = {
-    "wnv1",
-    AVMEDIA_TYPE_VIDEO,
-    CODEC_ID_WNV1,
-    sizeof(WNV1Context),
-    decode_init,
-    NULL,
-    decode_end,
-    decode_frame,
-    CODEC_CAP_DR1,
+    .name           = "wnv1",
+    .type           = AVMEDIA_TYPE_VIDEO,
+    .id             = CODEC_ID_WNV1,
+    .priv_data_size = sizeof(WNV1Context),
+    .init           = decode_init,
+    .close          = decode_end,
+    .decode         = decode_frame,
+    .capabilities   = CODEC_CAP_DR1,
     .long_name = NULL_IF_CONFIG_SMALL("Winnov WNV1"),
 };

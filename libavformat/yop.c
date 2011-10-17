@@ -1,5 +1,4 @@
-/**
- * @file
+/*
  * Psygnosis YOP demuxer
  *
  * Copyright (C) 2010 Mohamed Naufal Basheer <naufal11@gmail.com>
@@ -184,8 +183,6 @@ static int yop_read_seek(AVFormatContext *s, int stream_index,
     int64_t frame_pos, pos_min, pos_max;
     int frame_count;
 
-    av_free_packet(&yop->video_packet);
-
     if (!stream_index)
         return -1;
 
@@ -196,21 +193,25 @@ static int yop_read_seek(AVFormatContext *s, int stream_index,
     timestamp      = FFMAX(0, FFMIN(frame_count, timestamp));
 
     frame_pos      = timestamp * yop->frame_size + pos_min;
+
+    if (avio_seek(s->pb, frame_pos, SEEK_SET) < 0)
+        return -1;
+
+    av_free_packet(&yop->video_packet);
     yop->odd_frame = timestamp & 1;
 
-    avio_seek(s->pb, frame_pos, SEEK_SET);
     return 0;
 }
 
 AVInputFormat ff_yop_demuxer = {
-    "yop",
-    NULL_IF_CONFIG_SMALL("Psygnosis YOP Format"),
-    sizeof(YopDecContext),
-    yop_probe,
-    yop_read_header,
-    yop_read_packet,
-    yop_read_close,
-    yop_read_seek,
+    .name           = "yop",
+    .long_name      = NULL_IF_CONFIG_SMALL("Psygnosis YOP Format"),
+    .priv_data_size = sizeof(YopDecContext),
+    .read_probe     = yop_probe,
+    .read_header    = yop_read_header,
+    .read_packet    = yop_read_packet,
+    .read_close     = yop_read_close,
+    .read_seek      = yop_read_seek,
     .extensions = "yop",
     .flags = AVFMT_GENERIC_INDEX,
 };

@@ -163,10 +163,14 @@ static int avs_read_packet(AVFormatContext * s, AVPacket * pkt)
             sub_type = avio_r8(s->pb);
             type = avio_r8(s->pb);
             size = avio_rl16(s->pb);
+            if (size < 4)
+                return AVERROR_INVALIDDATA;
             avs->remaining_frame_size -= size;
 
             switch (type) {
             case AVS_PALETTE:
+                if (size - 4 > sizeof(palette))
+                    return AVERROR_INVALIDDATA;
                 ret = avio_read(s->pb, palette, size - 4);
                 if (ret < size - 4)
                     return AVERROR(EIO);
@@ -216,11 +220,11 @@ static int avs_read_close(AVFormatContext * s)
 }
 
 AVInputFormat ff_avs_demuxer = {
-    "avs",
-    NULL_IF_CONFIG_SMALL("AVS format"),
-    sizeof(AvsFormat),
-    avs_probe,
-    avs_read_header,
-    avs_read_packet,
-    avs_read_close,
+    .name           = "avs",
+    .long_name      = NULL_IF_CONFIG_SMALL("AVS format"),
+    .priv_data_size = sizeof(AvsFormat),
+    .read_probe     = avs_probe,
+    .read_header    = avs_read_header,
+    .read_packet    = avs_read_packet,
+    .read_close     = avs_read_close,
 };

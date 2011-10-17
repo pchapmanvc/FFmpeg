@@ -233,7 +233,6 @@ static int smacker_read_packet(AVFormatContext *s, AVPacket *pkt)
     int i;
     int frame_size = 0;
     int palchange = 0;
-    int pos;
 
     if (url_feof(s->pb) || smk->cur_frame >= smk->frames)
         return AVERROR_EOF;
@@ -244,7 +243,6 @@ static int smacker_read_packet(AVFormatContext *s, AVPacket *pkt)
         frame_size = smk->frm_size[smk->cur_frame] & (~3);
         flags = smk->frm_flags[smk->cur_frame];
         /* handle palette change event */
-        pos = avio_tell(s->pb);
         if(flags & SMACKER_PAL){
             int size, sz, t, off, j, pos;
             uint8_t *pal = smk->pal;
@@ -288,11 +286,16 @@ static int smacker_read_packet(AVFormatContext *s, AVPacket *pkt)
         for(i = 0; i < 7; i++) {
             if(flags & 1) {
                 int size;
+                uint8_t *tmpbuf;
+
                 size = avio_rl32(s->pb) - 4;
                 frame_size -= size;
                 frame_size -= 4;
                 smk->curstream++;
-                smk->bufs[smk->curstream] = av_realloc(smk->bufs[smk->curstream], size);
+                tmpbuf = av_realloc(smk->bufs[smk->curstream], size);
+                if (!tmpbuf)
+                    return AVERROR(ENOMEM);
+                smk->bufs[smk->curstream] = tmpbuf;
                 smk->buf_sizes[smk->curstream] = size;
                 ret = avio_read(s->pb, smk->bufs[smk->curstream], size);
                 if(ret != size)
@@ -301,7 +304,9 @@ static int smacker_read_packet(AVFormatContext *s, AVPacket *pkt)
             }
             flags >>= 1;
         }
-        if (av_new_packet(pkt, frame_size + 768))
+        if (frame_size < 0)
+            return AVERROR_INVALIDDATA;
+        if (av_new_packet(pkt, frame_size + 769))
             return AVERROR(ENOMEM);
         if(smk->frm_size[smk->cur_frame] & 1)
             palchange |= 2;
@@ -342,11 +347,11 @@ static int smacker_read_close(AVFormatContext *s)
 }
 
 AVInputFormat ff_smacker_demuxer = {
-    "smk",
-    NULL_IF_CONFIG_SMALL("Smacker video"),
-    sizeof(SmackerContext),
-    smacker_probe,
-    smacker_read_header,
-    smacker_read_packet,
-    smacker_read_close,
+    .name           = "smk",
+    .long_name      = NULL_IF_CONFIG_SMALL("Smacker video"),
+    .priv_data_size = sizeof(SmackerContext),
+    .read_probe     = smacker_probe,
+    .read_header    = smacker_read_header,
+    .read_packet    = smacker_read_packet,
+    .read_close     = smacker_read_close,
 };

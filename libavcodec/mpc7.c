@@ -29,7 +29,7 @@
 #include "avcodec.h"
 #include "get_bits.h"
 #include "dsputil.h"
-#include "mpegaudio.h"
+#include "mpegaudiodsp.h"
 #include "libavutil/audioconvert.h"
 
 #include "mpc.h"
@@ -68,6 +68,7 @@ static av_cold int mpc7_decode_init(AVCodecContext * avctx)
     memset(c->oldDSCF, 0, sizeof(c->oldDSCF));
     av_lfg_init(&c->rnd, 0xDEADBEEF);
     dsputil_init(&c->dsp, avctx);
+    ff_mpadsp_init(&c->mpadsp);
     c->dsp.bswap_buf((uint32_t*)buf, (const uint32_t*)avctx->extradata, 4);
     ff_mpc_init();
     init_get_bits(&gb, buf, 128);
@@ -196,12 +197,19 @@ static int mpc7_decode_frame(AVCodecContext * avctx,
     int i, ch;
     int mb = -1;
     Band *bands = c->bands;
-    int off;
+    int off, out_size;
     int bits_used, bits_avail;
 
     memset(bands, 0, sizeof(bands));
     if(buf_size <= 4){
         av_log(avctx, AV_LOG_ERROR, "Too small buffer passed (%i bytes)\n", buf_size);
+        return AVERROR(EINVAL);
+    }
+
+    out_size = (buf[1] ? c->lastframelen : MPC_FRAME_SIZE) * 4;
+    if (*data_size < out_size) {
+        av_log(avctx, AV_LOG_ERROR, "Output buffer is too small\n");
+        return AVERROR(EINVAL);
     }
 
     bits = av_malloc(((buf_size - 1) & ~3) + FF_INPUT_BUFFER_PADDING_SIZE);
@@ -276,7 +284,7 @@ static int mpc7_decode_frame(AVCodecContext * avctx,
         *data_size = 0;
         return buf_size;
     }
-    *data_size = (buf[1] ? c->lastframelen : MPC_FRAME_SIZE) * 4;
+    *data_size = out_size;
 
     return buf_size;
 }
@@ -290,14 +298,12 @@ static void mpc7_decode_flush(AVCodecContext *avctx)
 }
 
 AVCodec ff_mpc7_decoder = {
-    "mpc7",
-    AVMEDIA_TYPE_AUDIO,
-    CODEC_ID_MUSEPACK7,
-    sizeof(MPCContext),
-    mpc7_decode_init,
-    NULL,
-    NULL,
-    mpc7_decode_frame,
+    .name           = "mpc7",
+    .type           = AVMEDIA_TYPE_AUDIO,
+    .id             = CODEC_ID_MUSEPACK7,
+    .priv_data_size = sizeof(MPCContext),
+    .init           = mpc7_decode_init,
+    .decode         = mpc7_decode_frame,
     .flush = mpc7_decode_flush,
     .long_name = NULL_IF_CONFIG_SMALL("Musepack SV7"),
 };

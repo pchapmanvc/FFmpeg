@@ -32,6 +32,7 @@
 #include "avformat.h"
 #include "libavcodec/dvdata.h"
 #include "libavutil/intreadwrite.h"
+#include "libavutil/mathematics.h"
 #include "dv.h"
 
 struct DVDemuxContext {
@@ -316,7 +317,7 @@ int dv_get_packet(DVDemuxContext *c, AVPacket *pkt)
 }
 
 int dv_produce_packet(DVDemuxContext *c, AVPacket *pkt,
-                      uint8_t* buf, int buf_size)
+                      uint8_t* buf, int buf_size, int64_t pos)
 {
     int size, i;
     uint8_t *ppcm[4] = {0};
@@ -331,6 +332,7 @@ int dv_produce_packet(DVDemuxContext *c, AVPacket *pkt,
     /* FIXME: in case of no audio/bad audio we have to do something */
     size = dv_extract_audio_info(c, buf);
     for (i = 0; i < c->ach; i++) {
+       c->audio_pkt[i].pos  = pos;
        c->audio_pkt[i].size = size;
        c->audio_pkt[i].pts  = c->abytes * 30000*8 / c->ast[i]->codec->bit_rate;
        ppcm[i] = c->audio_buf[i];
@@ -354,6 +356,7 @@ int dv_produce_packet(DVDemuxContext *c, AVPacket *pkt,
     size = dv_extract_video_info(c, buf);
     av_init_packet(pkt);
     pkt->data         = buf;
+    pkt->pos          = pos;
     pkt->size         = size;
     pkt->flags       |= AV_PKT_FLAG_KEY;
     pkt->stream_index = c->vst->id;
@@ -452,13 +455,14 @@ static int dv_read_packet(AVFormatContext *s, AVPacket *pkt)
     size = dv_get_packet(c->dv_demux, pkt);
 
     if (size < 0) {
+        int64_t pos = avio_tell(s->pb);
         if (!c->dv_demux->sys)
             return AVERROR(EIO);
         size = c->dv_demux->sys->frame_size;
         if (avio_read(s->pb, c->buf, size) <= 0)
             return AVERROR(EIO);
 
-        size = dv_produce_packet(c->dv_demux, pkt, c->buf, size);
+        size = dv_produce_packet(c->dv_demux, pkt, c->buf, size, pos);
     }
 
     return size;
@@ -471,10 +475,11 @@ static int dv_read_seek(AVFormatContext *s, int stream_index,
     DVDemuxContext *c = r->dv_demux;
     int64_t offset    = dv_frame_offset(s, c, timestamp, flags);
 
-    dv_offset_reset(c, offset / c->sys->frame_size);
+    if (avio_seek(s->pb, offset, SEEK_SET) < 0)
+        return -1;
 
-    offset = avio_seek(s->pb, offset, SEEK_SET);
-    return (offset < 0) ? offset : 0;
+    dv_offset_reset(c, offset / c->sys->frame_size);
+    return 0;
 }
 
 static int dv_read_close(AVFormatContext *s)
@@ -519,14 +524,14 @@ static int dv_probe(AVProbeData *p)
 
 #if CONFIG_DV_DEMUXER
 AVInputFormat ff_dv_demuxer = {
-    "dv",
-    NULL_IF_CONFIG_SMALL("DV video format"),
-    sizeof(RawDVContext),
-    dv_probe,
-    dv_read_header,
-    dv_read_packet,
-    dv_read_close,
-    dv_read_seek,
+    .name           = "dv",
+    .long_name      = NULL_IF_CONFIG_SMALL("DV video format"),
+    .priv_data_size = sizeof(RawDVContext),
+    .read_probe     = dv_probe,
+    .read_header    = dv_read_header,
+    .read_packet    = dv_read_packet,
+    .read_close     = dv_read_close,
+    .read_seek      = dv_read_seek,
     .extensions = "dv,dif",
 };
 #endif

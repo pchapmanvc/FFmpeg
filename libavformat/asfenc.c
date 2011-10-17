@@ -19,10 +19,10 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 #include "avformat.h"
-#include "metadata.h"
 #include "riff.h"
 #include "asf.h"
 #include "avio_internal.h"
+#include "libavutil/dict.h"
 
 #undef NDEBUG
 #include <assert.h>
@@ -199,8 +199,8 @@ typedef struct {
     /* packet filling */
     unsigned char multi_payloads_present;
     int packet_size_left;
-    int packet_timestamp_start;
-    int packet_timestamp_end;
+    int64_t packet_timestamp_start;
+    int64_t packet_timestamp_end;
     unsigned int packet_nb_payloads;
     uint8_t packet_buf[PACKET_SIZE];
     AVIOContext pb;
@@ -215,8 +215,8 @@ typedef struct {
 } ASFContext;
 
 static const AVCodecTag codec_asf_bmp_tags[] = {
-    { CODEC_ID_MPEG4, MKTAG('M', 'P', '4', 'S') },
     { CODEC_ID_MPEG4, MKTAG('M', '4', 'S', '2') },
+    { CODEC_ID_MPEG4, MKTAG('M', 'P', '4', 'S') },
     { CODEC_ID_MSMPEG4V3, MKTAG('M', 'P', '4', '3') },
     { CODEC_ID_NONE, 0 },
 };
@@ -296,7 +296,7 @@ static int asf_write_header1(AVFormatContext *s, int64_t file_size, int64_t data
 {
     ASFContext *asf = s->priv_data;
     AVIOContext *pb = s->pb;
-    AVMetadataTag *tags[5];
+    AVDictionaryEntry *tags[5];
     int header_size, n, extra_size, extra_size2, wav_extra_size, file_time;
     int has_title;
     int metadata_count;
@@ -307,11 +307,11 @@ static int asf_write_header1(AVFormatContext *s, int64_t file_size, int64_t data
 
     ff_metadata_conv(&s->metadata, ff_asf_metadata_conv, NULL);
 
-    tags[0] = av_metadata_get(s->metadata, "title"    , NULL, 0);
-    tags[1] = av_metadata_get(s->metadata, "author"   , NULL, 0);
-    tags[2] = av_metadata_get(s->metadata, "copyright", NULL, 0);
-    tags[3] = av_metadata_get(s->metadata, "comment"  , NULL, 0);
-    tags[4] = av_metadata_get(s->metadata, "rating"   , NULL, 0);
+    tags[0] = av_dict_get(s->metadata, "title"    , NULL, 0);
+    tags[1] = av_dict_get(s->metadata, "author"   , NULL, 0);
+    tags[2] = av_dict_get(s->metadata, "copyright", NULL, 0);
+    tags[3] = av_dict_get(s->metadata, "comment"  , NULL, 0);
+    tags[4] = av_dict_get(s->metadata, "rating"   , NULL, 0);
 
     duration = asf->duration + PREROLL_TIME * 10000;
     has_title = tags[0] || tags[1] || tags[2] || tags[3] || tags[4];
@@ -381,10 +381,10 @@ static int asf_write_header1(AVFormatContext *s, int64_t file_size, int64_t data
         end_header(pb, hpos);
     }
     if (metadata_count) {
-        AVMetadataTag *tag = NULL;
+        AVDictionaryEntry *tag = NULL;
         hpos = put_header(pb, &ff_asf_extended_content_header);
         avio_wl16(pb, metadata_count);
-        while ((tag = av_metadata_get(s->metadata, "", tag, AV_METADATA_IGNORE_SUFFIX))) {
+        while ((tag = av_dict_get(s->metadata, "", tag, AV_DICT_IGNORE_SUFFIX))) {
             put_str16(pb, tag->key);
             avio_wl16(pb, 0);
             put_str16(pb, tag->value);
@@ -684,7 +684,7 @@ static void flush_packet(AVFormatContext *s)
 static void put_payload_header(
                                 AVFormatContext *s,
                                 ASFStream       *stream,
-                                int             presentation_time,
+                                int64_t         presentation_time,
                                 int             m_obj_size,
                                 int             m_obj_offset,
                                 int             payload_len,
@@ -711,7 +711,7 @@ static void put_payload_header(
     avio_w8(pb, ASF_PAYLOAD_REPLICATED_DATA_LENGTH);
 
     avio_wl32(pb, m_obj_size);       //Replicated Data - Media Object Size
-    avio_wl32(pb, presentation_time);//Replicated Data - Presentation Time
+    avio_wl32(pb, (uint32_t) presentation_time);//Replicated Data - Presentation Time
 
     if (asf->multi_payloads_present){
         avio_wl16(pb, payload_len);   //payload length
@@ -722,7 +722,7 @@ static void put_frame(
                     AVFormatContext *s,
                     ASFStream       *stream,
                     AVStream        *avst,
-                    int             timestamp,
+                    int64_t         timestamp,
                     const uint8_t   *buf,
                     int             m_obj_size,
                     int             flags
@@ -882,20 +882,20 @@ static int asf_write_trailer(AVFormatContext *s)
 
 #if CONFIG_ASF_MUXER
 AVOutputFormat ff_asf_muxer = {
-    "asf",
-    NULL_IF_CONFIG_SMALL("ASF format"),
-    "video/x-ms-asf",
-    "asf,wmv,wma",
-    sizeof(ASFContext),
+    .name           = "asf",
+    .long_name      = NULL_IF_CONFIG_SMALL("ASF format"),
+    .mime_type      = "video/x-ms-asf",
+    .extensions     = "asf,wmv,wma",
+    .priv_data_size = sizeof(ASFContext),
 #if CONFIG_LIBMP3LAME
-    CODEC_ID_MP3,
+    .audio_codec    = CODEC_ID_MP3,
 #else
-    CODEC_ID_MP2,
+    .audio_codec    = CODEC_ID_MP2,
 #endif
-    CODEC_ID_MSMPEG4V3,
-    asf_write_header,
-    asf_write_packet,
-    asf_write_trailer,
+    .video_codec    = CODEC_ID_MSMPEG4V3,
+    .write_header   = asf_write_header,
+    .write_packet   = asf_write_packet,
+    .write_trailer  = asf_write_trailer,
     .flags = AVFMT_GLOBALHEADER,
     .codec_tag= (const AVCodecTag* const []){codec_asf_bmp_tags, ff_codec_bmp_tags, ff_codec_wav_tags, 0},
 };
@@ -903,20 +903,20 @@ AVOutputFormat ff_asf_muxer = {
 
 #if CONFIG_ASF_STREAM_MUXER
 AVOutputFormat ff_asf_stream_muxer = {
-    "asf_stream",
-    NULL_IF_CONFIG_SMALL("ASF format"),
-    "video/x-ms-asf",
-    "asf,wmv,wma",
-    sizeof(ASFContext),
+    .name           = "asf_stream",
+    .long_name      = NULL_IF_CONFIG_SMALL("ASF format"),
+    .mime_type      = "video/x-ms-asf",
+    .extensions     = "asf,wmv,wma",
+    .priv_data_size = sizeof(ASFContext),
 #if CONFIG_LIBMP3LAME
-    CODEC_ID_MP3,
+    .audio_codec    = CODEC_ID_MP3,
 #else
-    CODEC_ID_MP2,
+    .audio_codec    = CODEC_ID_WMAV2,
 #endif
-    CODEC_ID_MSMPEG4V3,
-    asf_write_stream_header,
-    asf_write_packet,
-    asf_write_trailer,
+    .video_codec    = CODEC_ID_MSMPEG4V3,
+    .write_header   = asf_write_stream_header,
+    .write_packet   = asf_write_packet,
+    .write_trailer  = asf_write_trailer,
     .flags = AVFMT_GLOBALHEADER,
     .codec_tag= (const AVCodecTag* const []){codec_asf_bmp_tags, ff_codec_bmp_tags, ff_codec_wav_tags, 0},
 };

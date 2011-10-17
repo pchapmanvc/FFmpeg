@@ -24,6 +24,8 @@
  * default memory allocator for libavutil
  */
 
+#define _XOPEN_SOURCE 600
+
 #include "config.h"
 
 #include <limits.h>
@@ -57,35 +59,23 @@ void  free(void *ptr);
 
 #endif /* MALLOC_PREFIX */
 
+#define ALIGN (HAVE_AVX ? 32 : 16)
+
 /* You can redefine av_malloc and av_free in your project to use your
    memory allocator. You do not need to suppress this file because the
    linker will do it automatically. */
 
+#define MAX_MALLOC_SIZE INT_MAX
+
 void *av_malloc(size_t size)
 {
     void *ptr = NULL;
-#if CONFIG_MEMALIGN_HACK
-    long diff;
-#endif
 
     /* let's disallow possible ambiguous cases */
-    if(size > (INT_MAX-32) )
+    if (size > (MAX_MALLOC_SIZE-32))
         return NULL;
-    else if(!size)
-        size= 1;
 
-#if CONFIG_MEMALIGN_HACK
-    ptr = malloc(size+32);
-    if(!ptr)
-        return ptr;
-    diff= ((-(long)ptr - 1)&31) + 1;
-    ptr = (char*)ptr + diff;
-    ((char*)ptr)[-1]= diff;
-#elif HAVE_POSIX_MEMALIGN
-    if (posix_memalign(&ptr,32,size))
-        ptr = NULL;
-#elif HAVE_MEMALIGN
-    ptr = memalign(32,size);
+    ptr = __mingw_aligned_malloc(size, ALIGN);
     /* Why 64?
        Indeed, we should align it:
          on 4 for 386
@@ -110,40 +100,38 @@ void *av_malloc(size_t size)
 
         BTW, malloc seems to do 8-byte alignment by default here.
      */
-#else
-    ptr = malloc(size);
-#endif
+    if(!ptr && !size)
+        ptr= av_malloc(1);
     return ptr;
 }
 
 void *av_realloc(void *ptr, size_t size)
 {
-#if CONFIG_MEMALIGN_HACK
-    int diff;
-#endif
-
     /* let's disallow possible ambiguous cases */
-    if(size > (INT_MAX-16) )
+    if (size > (MAX_MALLOC_SIZE-16))
         return NULL;
 
-#if CONFIG_MEMALIGN_HACK
-    //FIXME this isn't aligned correctly, though it probably isn't needed
-    if(!ptr) return av_malloc(size);
-    diff= ((char*)ptr)[-1];
-    return (char*)realloc((char*)ptr - diff, size + diff) + diff;
-#else
-    return realloc(ptr, size);
-#endif
+    return __mingw_aligned_realloc(ptr, size, ALIGN);
+}
+
+void *av_realloc_f(void *ptr, size_t nelem, size_t elsize)
+{
+    size_t size;
+    void *r;
+
+    if (av_size_mult(elsize, nelem, &size)) {
+        av_free(ptr);
+        return NULL;
+    }
+    r = av_realloc(ptr, size);
+    if (!r && size)
+        av_free(ptr);
+    return r;
 }
 
 void av_free(void *ptr)
 {
-#if CONFIG_MEMALIGN_HACK
-    if (ptr)
-        free((char*)ptr - ((char*)ptr)[-1]);
-#else
-    free(ptr);
-#endif
+    __mingw_aligned_free(ptr);
 }
 
 void av_freep(void *arg)
@@ -159,6 +147,13 @@ void *av_mallocz(size_t size)
     if (ptr)
         memset(ptr, 0, size);
     return ptr;
+}
+
+void *av_calloc(size_t nmemb, size_t size)
+{
+    if (size <= 0 || nmemb >= INT_MAX / size)
+        return NULL;
+    return av_mallocz(nmemb * size);
 }
 
 char *av_strdup(const char *s)

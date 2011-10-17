@@ -142,7 +142,7 @@ voc_get_packet(AVFormatContext *s, AVPacket *pkt, AVStream *st, int max_size)
         }
     }
 
-    dec->bit_rate = dec->sample_rate * dec->bits_per_coded_sample;
+    dec->bit_rate = dec->sample_rate * dec->channels * dec->bits_per_coded_sample;
 
     if (max_size <= 0)
         max_size = 2048;
@@ -157,11 +157,11 @@ static int voc_read_packet(AVFormatContext *s, AVPacket *pkt)
 }
 
 AVInputFormat ff_voc_demuxer = {
-    "voc",
-    NULL_IF_CONFIG_SMALL("Creative Voice file format"),
-    sizeof(VocDecContext),
-    voc_probe,
-    voc_read_header,
-    voc_read_packet,
+    .name           = "voc",
+    .long_name      = NULL_IF_CONFIG_SMALL("Creative Voice file format"),
+    .priv_data_size = sizeof(VocDecContext),
+    .read_probe     = voc_probe,
+    .read_header    = voc_read_header,
+    .read_packet    = voc_read_packet,
     .codec_tag=(const AVCodecTag* const []){ff_voc_codec_tags, 0},
 };

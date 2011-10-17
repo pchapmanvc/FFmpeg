@@ -78,6 +78,58 @@ static void vc1_h_overlap_c(uint8_t* src, int stride)
     }
 }
 
+static void vc1_v_s_overlap_c(DCTELEM *top,  DCTELEM *bottom)
+{
+    int i;
+    int a, b, c, d;
+    int d1, d2;
+    int rnd1 = 4, rnd2 = 3;
+    for(i = 0; i < 8; i++) {
+        a = top[48];
+        b = top[56];
+        c = bottom[0];
+        d = bottom[8];
+        d1 = a - d;
+        d2 = a - d + b - c;
+
+        top[48]   = ((a << 3) - d1 + rnd1) >> 3;
+        top[56]   = ((b << 3) - d2 + rnd2) >> 3;
+        bottom[0] = ((c << 3) + d2 + rnd1) >> 3;
+        bottom[8] = ((d << 3) + d1 + rnd2) >> 3;
+
+        bottom++;
+        top++;
+        rnd2 = 7 - rnd2;
+        rnd1 = 7 - rnd1;
+    }
+}
+
+static void vc1_h_s_overlap_c(DCTELEM *left, DCTELEM *right)
+{
+    int i;
+    int a, b, c, d;
+    int d1, d2;
+    int rnd1 = 4, rnd2 = 3;
+    for(i = 0; i < 8; i++) {
+        a = left[6];
+        b = left[7];
+        c = right[0];
+        d = right[1];
+        d1 = a - d;
+        d2 = a - d + b - c;
+
+        left[6]  = ((a << 3) - d1 + rnd1) >> 3;
+        left[7]  = ((b << 3) - d2 + rnd2) >> 3;
+        right[0] = ((c << 3) + d2 + rnd1) >> 3;
+        right[1] = ((d << 3) + d1 + rnd2) >> 3;
+
+        right += 8;
+        left += 8;
+        rnd2 = 7 - rnd2;
+        rnd1 = 7 - rnd1;
+    }
+}
+
 /**
  * VC-1 in-loop deblocking filter for one line
  * @param src source block type
@@ -199,7 +251,7 @@ static void vc1_inv_trans_8x8_dc_c(uint8_t *dest, int linesize, DCTELEM *block)
     }
 }
 
-static av_always_inline void vc1_inv_trans_8x8_c(DCTELEM block[64], int shl, int sub)
+static void vc1_inv_trans_8x8_c(DCTELEM block[64])
 {
     int i;
     register int t1,t2,t3,t4,t5,t6,t7,t8;
@@ -254,48 +306,18 @@ static av_always_inline void vc1_inv_trans_8x8_c(DCTELEM block[64], int shl, int
         t3 =  9 * src[ 8] - 16 * src[24] +  4 * src[40] + 15 * src[56];
         t4 =  4 * src[ 8] -  9 * src[24] + 15 * src[40] - 16 * src[56];
 
-        dst[ 0] = (((t5 + t1    ) >> 7) - sub) << shl;
-        dst[ 8] = (((t6 + t2    ) >> 7) - sub) << shl;
-        dst[16] = (((t7 + t3    ) >> 7) - sub) << shl;
-        dst[24] = (((t8 + t4    ) >> 7) - sub) << shl;
-        dst[32] = (((t8 - t4 + 1) >> 7) - sub) << shl;
-        dst[40] = (((t7 - t3 + 1) >> 7) - sub) << shl;
-        dst[48] = (((t6 - t2 + 1) >> 7) - sub) << shl;
-        dst[56] = (((t5 - t1 + 1) >> 7) - sub) << shl;
+        dst[ 0] = (t5 + t1) >> 7;
+        dst[ 8] = (t6 + t2) >> 7;
+        dst[16] = (t7 + t3) >> 7;
+        dst[24] = (t8 + t4) >> 7;
+        dst[32] = (t8 - t4 + 1) >> 7;
+        dst[40] = (t7 - t3 + 1) >> 7;
+        dst[48] = (t6 - t2 + 1) >> 7;
+        dst[56] = (t5 - t1 + 1) >> 7;
 
         src++;
         dst++;
     }
-}
-
-static void vc1_inv_trans_8x8_add_c(uint8_t *dest, int linesize, DCTELEM *block)
-{
-    vc1_inv_trans_8x8_c(block, 0, 0);
-    ff_add_pixels_clamped_c(block, dest, linesize);
-}
-
-static void vc1_inv_trans_8x8_put_signed_c(uint8_t *dest, int linesize, DCTELEM *block)
-{
-    vc1_inv_trans_8x8_c(block, 0, 0);
-    ff_put_signed_pixels_clamped_c(block, dest, linesize);
-}
-
-static void vc1_inv_trans_8x8_put_signed_rangered_c(uint8_t *dest, int linesize, DCTELEM *block)
-{
-    vc1_inv_trans_8x8_c(block, 1, 0);
-    ff_put_signed_pixels_clamped_c(block, dest, linesize);
-}
-
-static void vc1_inv_trans_8x8_put_c(uint8_t *dest, int linesize, DCTELEM *block)
-{
-    vc1_inv_trans_8x8_c(block, 0, 0);
-    ff_put_pixels_clamped_c(block, dest, linesize);
-}
-
-static void vc1_inv_trans_8x8_put_rangered_c(uint8_t *dest, int linesize, DCTELEM *block)
-{
-    vc1_inv_trans_8x8_c(block, 1, 64);
-    ff_put_pixels_clamped_c(block, dest, linesize);
 }
 
 /** Do inverse transform on 8x4 part of block
@@ -691,12 +713,68 @@ static void avg_no_rnd_vc1_chroma_mc8_c(uint8_t *dst/*align 8*/, uint8_t *src/*a
     }
 }
 
+#if CONFIG_WMV3IMAGE_DECODER || CONFIG_VC1IMAGE_DECODER
+
+static void sprite_h_c(uint8_t *dst, const uint8_t *src, int offset, int advance, int count)
+{
+    while (count--) {
+        int a = src[(offset >> 16)    ];
+        int b = src[(offset >> 16) + 1];
+        *dst++ = a + ((b - a) * (offset&0xFFFF) >> 16);
+        offset += advance;
+    }
+}
+
+static av_always_inline void sprite_v_template(uint8_t *dst, const uint8_t *src1a, const uint8_t *src1b, int offset1,
+                                            int two_sprites, const uint8_t *src2a, const uint8_t *src2b, int offset2,
+                                            int alpha, int scaled, int width)
+{
+    int a1, b1, a2, b2;
+    while (width--) {
+        a1 = *src1a++;
+        if (scaled) {
+            b1 = *src1b++;
+            a1 = a1 + ((b1 - a1) * offset1 >> 16);
+        }
+        if (two_sprites) {
+            a2 = *src2a++;
+            if (scaled > 1) {
+                b2 = *src2b++;
+                a2 = a2 + ((b2 - a2) * offset2 >> 16);
+            }
+            a1 = a1 + ((a2 - a1) * alpha >> 16);
+        }
+        *dst++ = a1;
+    }
+}
+
+static void sprite_v_single_c(uint8_t *dst, const uint8_t *src1a, const uint8_t *src1b, int offset, int width)
+{
+    sprite_v_template(dst, src1a, src1b, offset, 0, NULL, NULL, 0, 0, 1, width);
+}
+
+static void sprite_v_double_noscale_c(uint8_t *dst, const uint8_t *src1a, const uint8_t *src2a, int alpha, int width)
+{
+    sprite_v_template(dst, src1a, NULL, 0, 1, src2a, NULL, 0, alpha, 0, width);
+}
+
+static void sprite_v_double_onescale_c(uint8_t *dst, const uint8_t *src1a, const uint8_t *src1b, int offset1,
+                                                     const uint8_t *src2a, int alpha, int width)
+{
+    sprite_v_template(dst, src1a, src1b, offset1, 1, src2a, NULL, 0, alpha, 1, width);
+}
+
+static void sprite_v_double_twoscale_c(uint8_t *dst, const uint8_t *src1a, const uint8_t *src1b, int offset1,
+                                                     const uint8_t *src2a, const uint8_t *src2b, int offset2,
+                                       int alpha, int width)
+{
+    sprite_v_template(dst, src1a, src1b, offset1, 1, src2a, src2b, offset2, alpha, 2, width);
+}
+
+#endif
+
 av_cold void ff_vc1dsp_init(VC1DSPContext* dsp) {
-    dsp->vc1_inv_trans_8x8_add = vc1_inv_trans_8x8_add_c;
-    dsp->vc1_inv_trans_8x8_put_signed[0] = vc1_inv_trans_8x8_put_signed_c;
-    dsp->vc1_inv_trans_8x8_put_signed[1] = vc1_inv_trans_8x8_put_signed_rangered_c;
-    dsp->vc1_inv_trans_8x8_put[0] = vc1_inv_trans_8x8_put_c;
-    dsp->vc1_inv_trans_8x8_put[1] = vc1_inv_trans_8x8_put_rangered_c;
+    dsp->vc1_inv_trans_8x8 = vc1_inv_trans_8x8_c;
     dsp->vc1_inv_trans_4x8 = vc1_inv_trans_4x8_c;
     dsp->vc1_inv_trans_8x4 = vc1_inv_trans_8x4_c;
     dsp->vc1_inv_trans_4x4 = vc1_inv_trans_4x4_c;
@@ -706,6 +784,8 @@ av_cold void ff_vc1dsp_init(VC1DSPContext* dsp) {
     dsp->vc1_inv_trans_4x4_dc = vc1_inv_trans_4x4_dc_c;
     dsp->vc1_h_overlap = vc1_h_overlap_c;
     dsp->vc1_v_overlap = vc1_v_overlap_c;
+    dsp->vc1_h_s_overlap = vc1_h_s_overlap_c;
+    dsp->vc1_v_s_overlap = vc1_v_s_overlap_c;
     dsp->vc1_v_loop_filter4 = vc1_v_loop_filter4_c;
     dsp->vc1_h_loop_filter4 = vc1_h_loop_filter4_c;
     dsp->vc1_v_loop_filter8 = vc1_v_loop_filter8_c;
@@ -749,6 +829,14 @@ av_cold void ff_vc1dsp_init(VC1DSPContext* dsp) {
 
     dsp->put_no_rnd_vc1_chroma_pixels_tab[0]= put_no_rnd_vc1_chroma_mc8_c;
     dsp->avg_no_rnd_vc1_chroma_pixels_tab[0]= avg_no_rnd_vc1_chroma_mc8_c;
+
+#if CONFIG_WMV3IMAGE_DECODER || CONFIG_VC1IMAGE_DECODER
+    dsp->sprite_h = sprite_h_c;
+    dsp->sprite_v_single = sprite_v_single_c;
+    dsp->sprite_v_double_noscale = sprite_v_double_noscale_c;
+    dsp->sprite_v_double_onescale = sprite_v_double_onescale_c;
+    dsp->sprite_v_double_twoscale = sprite_v_double_twoscale_c;
+#endif
 
     if (HAVE_ALTIVEC)
         ff_vc1dsp_init_altivec(dsp);

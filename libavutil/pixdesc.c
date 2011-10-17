@@ -561,6 +561,31 @@ const AVPixFmtDescriptor av_pix_fmt_descriptors[PIX_FMT_NB] = {
             {0,5,5,0,15},       /* B */
         },
     },
+    [PIX_FMT_RGBA64BE] = {
+        .name = "rgba64be",
+        .nb_components= 4,
+        .log2_chroma_w= 0,
+        .log2_chroma_h= 0,
+        .comp = {
+            {0,5,1,0,15},       /* R */
+            {0,5,3,0,15},       /* G */
+            {0,5,5,0,15},       /* B */
+            {0,5,7,0,15},       /* A */
+        },
+        .flags = PIX_FMT_BE,
+    },
+    [PIX_FMT_RGBA64LE] = {
+        .name = "rgba64le",
+        .nb_components= 4,
+        .log2_chroma_w= 0,
+        .log2_chroma_h= 0,
+        .comp = {
+            {0,5,1,0,15},       /* R */
+            {0,5,3,0,15},       /* G */
+            {0,5,5,0,15},       /* B */
+            {0,5,7,0,15},       /* B */
+        },
+    },
     [PIX_FMT_RGB565BE] = {
         .name = "rgb565be",
         .nb_components= 3,
@@ -651,6 +676,31 @@ const AVPixFmtDescriptor av_pix_fmt_descriptors[PIX_FMT_NB] = {
             {0,5,1,0,15},       /* B */
             {0,5,3,0,15},       /* G */
             {0,5,5,0,15},       /* R */
+        },
+    },
+    [PIX_FMT_BGRA64BE] = {
+        .name = "bgra64be",
+        .nb_components= 4,
+        .log2_chroma_w= 0,
+        .log2_chroma_h= 0,
+        .comp = {
+            {0,5,1,0,15},       /* B */
+            {0,5,3,0,15},       /* G */
+            {0,5,5,0,15},       /* R */
+            {0,5,7,0,15},       /* A */
+        },
+        .flags = PIX_FMT_BE,
+    },
+    [PIX_FMT_BGRA64LE] = {
+        .name = "bgra64le",
+        .nb_components= 4,
+        .log2_chroma_w= 0,
+        .log2_chroma_h= 0,
+        .comp = {
+            {0,5,1,0,15},       /* B */
+            {0,5,3,0,15},       /* G */
+            {0,5,5,0,15},       /* R */
+            {0,5,7,0,15},       /* A */
         },
     },
     [PIX_FMT_BGR565BE] = {
@@ -809,6 +859,29 @@ const AVPixFmtDescriptor av_pix_fmt_descriptors[PIX_FMT_NB] = {
         },
         .flags = PIX_FMT_BE,
     },
+    [PIX_FMT_YUV422P10LE] = {
+        .name = "yuv422p10le",
+        .nb_components= 3,
+        .log2_chroma_w= 1,
+        .log2_chroma_h= 0,
+        .comp = {
+            {0,1,1,0,9},        /* Y */
+            {1,1,1,0,9},        /* U */
+            {2,1,1,0,9},        /* V */
+        },
+    },
+    [PIX_FMT_YUV422P10BE] = {
+        .name = "yuv422p10be",
+        .nb_components= 3,
+        .log2_chroma_w= 1,
+        .log2_chroma_h= 0,
+        .comp = {
+            {0,1,1,0,9},        /* Y */
+            {1,1,1,0,9},        /* U */
+            {2,1,1,0,9},        /* V */
+        },
+        .flags = PIX_FMT_BE,
+    },
     [PIX_FMT_YUV422P16LE] = {
         .name = "yuv422p16le",
         .nb_components= 3,
@@ -855,6 +928,52 @@ const AVPixFmtDescriptor av_pix_fmt_descriptors[PIX_FMT_NB] = {
         },
         .flags = PIX_FMT_BE,
     },
+    [PIX_FMT_YUV444P10LE] = {
+        .name = "yuv444p10le",
+        .nb_components= 3,
+        .log2_chroma_w= 0,
+        .log2_chroma_h= 0,
+        .comp = {
+            {0,1,1,0,9},        /* Y */
+            {1,1,1,0,9},        /* U */
+            {2,1,1,0,9},        /* V */
+        },
+    },
+    [PIX_FMT_YUV444P10BE] = {
+        .name = "yuv444p10be",
+        .nb_components= 3,
+        .log2_chroma_w= 0,
+        .log2_chroma_h= 0,
+        .comp = {
+            {0,1,1,0,9},        /* Y */
+            {1,1,1,0,9},        /* U */
+            {2,1,1,0,9},        /* V */
+        },
+        .flags = PIX_FMT_BE,
+    },
+    [PIX_FMT_YUV444P9LE] = {
+        .name = "yuv444p9le",
+        .nb_components= 3,
+        .log2_chroma_w= 0,
+        .log2_chroma_h= 0,
+        .comp = {
+            {0,1,1,0,8},        /* Y */
+            {1,1,1,0,8},        /* U */
+            {2,1,1,0,8},        /* V */
+        },
+    },
+    [PIX_FMT_YUV444P9BE] = {
+        .name = "yuv444p9be",
+        .nb_components= 3,
+        .log2_chroma_w= 0,
+        .log2_chroma_h= 0,
+        .comp = {
+            {0,1,1,0,8},        /* Y */
+            {1,1,1,0,8},        /* U */
+            {2,1,1,0,8},        /* V */
+        },
+        .flags = PIX_FMT_BE,
+    },
     [PIX_FMT_DXVA2_VLD] = {
         .name = "dxva2_vld",
         .log2_chroma_w = 1,
@@ -869,6 +988,15 @@ const AVPixFmtDescriptor av_pix_fmt_descriptors[PIX_FMT_NB] = {
             {0,1,2,0,7},        /* A */
         },
     },
+    [PIX_FMT_GBR24P] = {
+        .name = "gbr24p",
+        .nb_components= 3,
+        .comp = {
+            {1,0,1,0,7},        /* B */
+            {0,0,1,0,7},        /* G */
+            {2,0,1,0,7},        /* R */
+        },
+    },
 };
 
 static enum PixelFormat get_pix_fmt_internal(const char *name)
@@ -881,6 +1009,12 @@ static enum PixelFormat get_pix_fmt_internal(const char *name)
             return pix_fmt;
 
     return PIX_FMT_NONE;
+}
+
+const char *av_get_pix_fmt_name(enum PixelFormat pix_fmt)
+{
+    return (unsigned)pix_fmt < PIX_FMT_NB ?
+        av_pix_fmt_descriptors[pix_fmt].name : NULL;
 }
 
 #if HAVE_BIGENDIAN
@@ -919,6 +1053,11 @@ int av_get_bits_per_pixel(const AVPixFmtDescriptor *pixdesc)
     }
 
     return bits >> log2_pixels;
+}
+
+int av_get_bits_per_pixel2(enum PixelFormat pix_fmt)
+{
+    return av_get_bits_per_pixel(&av_pix_fmt_descriptors[pix_fmt]);
 }
 
 char *av_get_pix_fmt_string (char *buf, int buf_size, enum PixelFormat pix_fmt)

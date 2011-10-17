@@ -20,7 +20,9 @@
  */
 
 #include "libavutil/intreadwrite.h"
+#include "libavutil/mathematics.h"
 #include "libavutil/tree.h"
+#include "libavutil/dict.h"
 #include "libavcodec/mpegaudiodata.h"
 #include "nut.h"
 #include "internal.h"
@@ -432,7 +434,7 @@ static int add_info(AVIOContext *bc, const char *type, const char *value){
 
 static int write_globalinfo(NUTContext *nut, AVIOContext *bc){
     AVFormatContext *s= nut->avf;
-    AVMetadataTag *t = NULL;
+    AVDictionaryEntry *t = NULL;
     AVIOContext *dyn_bc;
     uint8_t *dyn_buf=NULL;
     int count=0, dyn_size;
@@ -440,7 +442,7 @@ static int write_globalinfo(NUTContext *nut, AVIOContext *bc){
     if(ret < 0)
         return ret;
 
-    while ((t = av_metadata_get(s->metadata, "", t, AV_METADATA_IGNORE_SUFFIX)))
+    while ((t = av_dict_get(s->metadata, "", t, AV_DICT_IGNORE_SUFFIX)))
         count += add_info(dyn_bc, t->key, t->value);
 
     ff_put_v(bc, 0); //stream_if_plus1
@@ -491,7 +493,7 @@ static int write_chapter(NUTContext *nut, AVIOContext *bc, int id)
 {
     AVIOContext *dyn_bc;
     uint8_t *dyn_buf = NULL;
-    AVMetadataTag *t = NULL;
+    AVDictionaryEntry *t = NULL;
     AVChapter *ch    = nut->avf->chapters[id];
     int ret, dyn_size, count = 0;
 
@@ -504,7 +506,7 @@ static int write_chapter(NUTContext *nut, AVIOContext *bc, int id)
     put_tt(nut, nut->chapter[id].time_base, bc, ch->start); // chapter_start
     ff_put_v(bc, ch->end - ch->start);                      // chapter_len
 
-    while ((t = av_metadata_get(ch->metadata, "", t, AV_METADATA_IGNORE_SUFFIX)))
+    while ((t = av_dict_get(ch->metadata, "", t, AV_DICT_IGNORE_SUFFIX)))
         count += add_info(dyn_bc, t->key, t->value);
 
     ff_put_v(bc, count);
@@ -578,7 +580,7 @@ static int write_headers(AVFormatContext *avctx, AVIOContext *bc){
     return 0;
 }
 
-static int write_header(AVFormatContext *s){
+static int nut_write_header(AVFormatContext *s){
     NUTContext *nut = s->priv_data;
     AVIOContext *bc = s->pb;
     int i, j, ret;
@@ -589,6 +591,12 @@ static int write_header(AVFormatContext *s){
     nut->chapter  = av_mallocz(sizeof(ChapterContext)*s->nb_chapters);
     nut->time_base= av_mallocz(sizeof(AVRational   )*(s->nb_streams +
                                                       s->nb_chapters));
+    if (!nut->stream || !nut->chapter || !nut->time_base) {
+        av_freep(&nut->stream);
+        av_freep(&nut->chapter);
+        av_freep(&nut->time_base);
+        return AVERROR(ENOMEM);
+    }
 
     for(i=0; i<s->nb_streams; i++){
         AVStream *st= s->streams[i];
@@ -684,7 +692,7 @@ static int find_best_header_idx(NUTContext *nut, AVPacket *pkt){
     return best_i;
 }
 
-static int write_packet(AVFormatContext *s, AVPacket *pkt){
+static int nut_write_packet(AVFormatContext *s, AVPacket *pkt){
     NUTContext *nut = s->priv_data;
     StreamContext *nus= &nut->stream[pkt->stream_index];
     AVIOContext *bc = s->pb, *dyn_bc;
@@ -838,7 +846,7 @@ static int write_packet(AVFormatContext *s, AVPacket *pkt){
     return 0;
 }
 
-static int write_trailer(AVFormatContext *s){
+static int nut_write_trailer(AVFormatContext *s){
     NUTContext *nut= s->priv_data;
     AVIOContext *bc= s->pb;
 
@@ -854,22 +862,22 @@ static int write_trailer(AVFormatContext *s){
 }
 
 AVOutputFormat ff_nut_muxer = {
-    "nut",
-    NULL_IF_CONFIG_SMALL("NUT format"),
-    "video/x-nut",
-    "nut",
-    sizeof(NUTContext),
+    .name           = "nut",
+    .long_name      = NULL_IF_CONFIG_SMALL("NUT format"),
+    .mime_type      = "video/x-nut",
+    .extensions     = "nut",
+    .priv_data_size = sizeof(NUTContext),
 #if   CONFIG_LIBVORBIS
-    CODEC_ID_VORBIS,
+    .audio_codec    = CODEC_ID_VORBIS,
 #elif CONFIG_LIBMP3LAME
-    CODEC_ID_MP3,
+    .audio_codec    = CODEC_ID_MP3,
 #else
-    CODEC_ID_MP2,
+    .audio_codec    = CODEC_ID_MP2,
 #endif
-    CODEC_ID_MPEG4,
-    write_header,
-    write_packet,
-    write_trailer,
+    .video_codec    = CODEC_ID_MPEG4,
+    .write_header   = nut_write_header,
+    .write_packet   = nut_write_packet,
+    .write_trailer  = nut_write_trailer,
     .flags = AVFMT_GLOBALHEADER | AVFMT_VARIABLE_FPS,
     .codec_tag = (const AVCodecTag * const []){ ff_codec_bmp_tags, ff_nut_video_tags, ff_codec_wav_tags, ff_nut_subtitle_tags, 0 },
 };

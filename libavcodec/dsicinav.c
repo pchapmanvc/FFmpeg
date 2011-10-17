@@ -94,6 +94,7 @@ static av_cold int cinvideo_decode_init(AVCodecContext *avctx)
     cin->avctx = avctx;
     avctx->pix_fmt = PIX_FMT_PAL8;
 
+    avcodec_get_frame_defaults(&cin->frame);
     cin->frame.data[0] = NULL;
 
     cin->bitmap_size = avctx->width * avctx->height;
@@ -216,7 +217,11 @@ static int cinvideo_decode_frame(AVCodecContext *avctx,
     bitmap_frame_size = buf_size - 4;
 
     /* handle palette */
+    if (bitmap_frame_size < palette_colors_count * (3 + (palette_type != 0)))
+        return AVERROR_INVALIDDATA;
     if (palette_type == 0) {
+        if (palette_colors_count > 256)
+            return AVERROR_INVALIDDATA;
         for (i = 0; i < palette_colors_count; ++i) {
             cin->palette[i] = bytestream_get_le24(&buf);
             bitmap_frame_size -= 3;
@@ -344,26 +349,23 @@ static int cinaudio_decode_frame(AVCodecContext *avctx,
 
 
 AVCodec ff_dsicinvideo_decoder = {
-    "dsicinvideo",
-    AVMEDIA_TYPE_VIDEO,
-    CODEC_ID_DSICINVIDEO,
-    sizeof(CinVideoContext),
-    cinvideo_decode_init,
-    NULL,
-    cinvideo_decode_end,
-    cinvideo_decode_frame,
-    CODEC_CAP_DR1,
+    .name           = "dsicinvideo",
+    .type           = AVMEDIA_TYPE_VIDEO,
+    .id             = CODEC_ID_DSICINVIDEO,
+    .priv_data_size = sizeof(CinVideoContext),
+    .init           = cinvideo_decode_init,
+    .close          = cinvideo_decode_end,
+    .decode         = cinvideo_decode_frame,
+    .capabilities   = CODEC_CAP_DR1,
     .long_name = NULL_IF_CONFIG_SMALL("Delphine Software International CIN video"),
 };
 
 AVCodec ff_dsicinaudio_decoder = {
-    "dsicinaudio",
-    AVMEDIA_TYPE_AUDIO,
-    CODEC_ID_DSICINAUDIO,
-    sizeof(CinAudioContext),
-    cinaudio_decode_init,
-    NULL,
-    NULL,
-    cinaudio_decode_frame,
+    .name           = "dsicinaudio",
+    .type           = AVMEDIA_TYPE_AUDIO,
+    .id             = CODEC_ID_DSICINAUDIO,
+    .priv_data_size = sizeof(CinAudioContext),
+    .init           = cinaudio_decode_init,
+    .decode         = cinaudio_decode_frame,
     .long_name = NULL_IF_CONFIG_SMALL("Delphine Software International CIN audio"),
 };

@@ -674,7 +674,7 @@ static float get_floor_average(vorbis_enc_floor * fc, float *coeffs, int i)
 }
 
 static void floor_fit(vorbis_enc_context *venc, vorbis_enc_floor *fc,
-                      float *coeffs, uint_fast16_t *posts, int samples)
+                      float *coeffs, uint16_t *posts, int samples)
 {
     int range = 255 / fc->multiplier + 1;
     int i;
@@ -706,7 +706,7 @@ static int render_point(int x0, int y0, int x1, int y1, int x)
 }
 
 static void floor_encode(vorbis_enc_context *venc, vorbis_enc_floor *fc,
-                         PutBitContext *pb, uint_fast16_t *posts,
+                         PutBitContext *pb, uint16_t *posts,
                          float *floor, int samples)
 {
     int range = 255 / fc->multiplier + 1;
@@ -1010,7 +1010,7 @@ static int vorbis_encode_frame(AVCodecContext *avccontext,
 
     for (i = 0; i < venc->channels; i++) {
         vorbis_enc_floor *fc = &venc->floors[mapping->floor[mapping->mux[i]]];
-        uint_fast16_t posts[MAX_FLOOR_VALUES];
+        uint16_t posts[MAX_FLOOR_VALUES];
         floor_fit(venc, fc, &venc->coeffs[i * samples], posts, samples);
         floor_encode(venc, fc, &pb, posts, &venc->floor[i * samples], samples);
     }
@@ -1103,13 +1103,13 @@ static av_cold int vorbis_encode_close(AVCodecContext *avccontext)
 }
 
 AVCodec ff_vorbis_encoder = {
-    "vorbis",
-    AVMEDIA_TYPE_AUDIO,
-    CODEC_ID_VORBIS,
-    sizeof(vorbis_enc_context),
-    vorbis_encode_init,
-    vorbis_encode_frame,
-    vorbis_encode_close,
+    .name           = "vorbis",
+    .type           = AVMEDIA_TYPE_AUDIO,
+    .id             = CODEC_ID_VORBIS,
+    .priv_data_size = sizeof(vorbis_enc_context),
+    .init           = vorbis_encode_init,
+    .encode         = vorbis_encode_frame,
+    .close          = vorbis_encode_close,
     .capabilities= CODEC_CAP_DELAY | CODEC_CAP_EXPERIMENTAL,
     .sample_fmts = (const enum AVSampleFormat[]){AV_SAMPLE_FMT_S16,AV_SAMPLE_FMT_NONE},
     .long_name = NULL_IF_CONFIG_SMALL("Vorbis"),

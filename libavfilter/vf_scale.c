@@ -26,6 +26,7 @@
 #include "avfilter.h"
 #include "libavutil/avstring.h"
 #include "libavutil/eval.h"
+#include "libavutil/mathematics.h"
 #include "libavutil/pixdesc.h"
 #include "libavutil/avassert.h"
 #include "libswscale/swscale.h"
@@ -39,6 +40,8 @@ static const char *var_names[] = {
     "out_w",  "ow",
     "out_h",  "oh",
     "a",
+    "sar",
+    "dar",
     "hsub",
     "vsub",
     NULL
@@ -53,6 +56,8 @@ enum var_name {
     VAR_OUT_W,  VAR_OW,
     VAR_OUT_H,  VAR_OH,
     VAR_A,
+    VAR_SAR,
+    VAR_DAR,
     VAR_HSUB,
     VAR_VSUB,
     VARS_NB
@@ -158,6 +163,9 @@ static int config_props(AVFilterLink *outlink)
     var_values[VAR_OUT_W] = var_values[VAR_OW] = NAN;
     var_values[VAR_OUT_H] = var_values[VAR_OH] = NAN;
     var_values[VAR_A]     = (float) inlink->w / inlink->h;
+    var_values[VAR_SAR]   = inlink->sample_aspect_ratio.num ?
+        (float) inlink->sample_aspect_ratio.num / inlink->sample_aspect_ratio.den : 1;
+    var_values[VAR_DAR]   = var_values[VAR_A] * var_values[VAR_SAR];
     var_values[VAR_HSUB]  = 1<<av_pix_fmt_descriptors[inlink->format].log2_chroma_w;
     var_values[VAR_VSUB]  = 1<<av_pix_fmt_descriptors[inlink->format].log2_chroma_h;
 
@@ -214,19 +222,28 @@ static int config_props(AVFilterLink *outlink)
 
     scale->input_is_pal = av_pix_fmt_descriptors[inlink->format].flags & PIX_FMT_PAL;
 
-    if(scale->sws)
+    if (scale->sws)
         sws_freeContext(scale->sws);
     scale->sws = sws_getContext(inlink ->w, inlink ->h, inlink ->format,
                                 outlink->w, outlink->h, outlink->format,
                                 scale->flags, NULL, NULL, NULL);
+    if (scale->isws[0])
+        sws_freeContext(scale->isws[0]);
     scale->isws[0] = sws_getContext(inlink ->w, inlink ->h/2, inlink ->format,
                                     outlink->w, outlink->h/2, outlink->format,
                                     scale->flags, NULL, NULL, NULL);
+    if (scale->isws[1])
+        sws_freeContext(scale->isws[1]);
     scale->isws[1] = sws_getContext(inlink ->w, inlink ->h/2, inlink ->format,
                                     outlink->w, outlink->h/2, outlink->format,
                                     scale->flags, NULL, NULL, NULL);
-    if (!scale->sws)
+    if (!scale->sws || !scale->isws[0] || !scale->isws[1])
         return AVERROR(EINVAL);
+
+    if (inlink->sample_aspect_ratio.num){
+        outlink->sample_aspect_ratio = av_mul_q((AVRational){outlink->h * inlink->w, outlink->w * inlink->h}, inlink->sample_aspect_ratio);
+    } else
+        outlink->sample_aspect_ratio = inlink->sample_aspect_ratio;
 
     return 0;
 
@@ -266,7 +283,8 @@ static int scale_slice(AVFilterLink *link, struct SwsContext *sws, int y, int h,
     ScaleContext *scale = link->dst->priv;
     AVFilterBufferRef *cur_pic = link->cur_buf;
     AVFilterBufferRef *out_buf = link->dst->outputs[0]->out_buf;
-    const uint8_t *in[4], *out[4];
+    const uint8_t *in[4];
+    uint8_t *out[4];
     int in_stride[4],out_stride[4];
     int i;
 

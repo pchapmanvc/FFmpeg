@@ -23,16 +23,31 @@
  * audio conversion routines
  */
 
-#include "libavutil/avutil.h"
-#include "libavutil/avstring.h"
+#include "avstring.h"
+#include "avutil.h"
 #include "audioconvert.h"
 
 static const char * const channel_names[] = {
-    "FL", "FR", "FC", "LFE", "BL",  "BR",  "FLC", "FRC",
-    "BC", "SL", "SR", "TC",  "TFL", "TFC", "TFR", "TBL",
-    "TBC", "TBR",
-    [29] = "DL",
-    [30] = "DR",
+    [0]  = "FL",        /* front left */
+    [1]  = "FR",        /* front right */
+    [2]  = "FC",        /* front center */
+    [3]  = "LFE",       /* low frequency */
+    [4]  = "BL",        /* back left */
+    [5]  = "BR",        /* back right */
+    [6]  = "FLC",       /* front left-of-center  */
+    [7]  = "FRC",       /* front right-of-center */
+    [8]  = "BC",        /* back-center */
+    [9]  = "SL",        /* side left */
+    [10] = "SR",        /* side right */
+    [11] = "TC",        /* top center */
+    [12] = "TFL",       /* top front left */
+    [13] = "TFC",       /* top front center */
+    [14] = "TFR",       /* top front right */
+    [15] = "TBL",       /* top back left */
+    [16] = "TBC",       /* top back center */
+    [17] = "TBR",       /* top back right */
+    [29] = "DL",        /* downmix left */
+    [30] = "DR",        /* downmix right */
 };
 
 static const char *get_channel_name(int channel_id)
@@ -55,9 +70,11 @@ static const struct {
     { "5.0",         5,  AV_CH_LAYOUT_5POINT0_BACK },
     { "5.1",         6,  AV_CH_LAYOUT_5POINT1 },
     { "5.1",         6,  AV_CH_LAYOUT_5POINT1_BACK },
-    { "5.1+downmix", 8,  AV_CH_LAYOUT_5POINT1|AV_CH_LAYOUT_STEREO_DOWNMIX, },
+    { "6.1",         7,  AV_CH_LAYOUT_5POINT1|AV_CH_BACK_CENTER },
+    { "6.1",         7,  AV_CH_LAYOUT_5POINT1_BACK|AV_CH_BACK_CENTER },
     { "7.1",         8,  AV_CH_LAYOUT_7POINT1 },
-    { "7.1(wide)",   8,  AV_CH_LAYOUT_7POINT1_WIDE },
+    { "7.1",         8,  AV_CH_LAYOUT_7POINT1_WIDE },
+    { "5.1+downmix", 8,  AV_CH_LAYOUT_5POINT1|AV_CH_LAYOUT_STEREO_DOWNMIX, },
     { "7.1+downmix", 10, AV_CH_LAYOUT_7POINT1|AV_CH_LAYOUT_STEREO_DOWNMIX, },
     { 0 }
 };
@@ -91,13 +108,14 @@ void av_get_channel_layout_string(char *buf, int buf_size,
 
     snprintf(buf, buf_size, "%d channels", nb_channels);
     if (channel_layout) {
-        int i,ch;
+        int i, ch;
         av_strlcat(buf, " (", buf_size);
-        for(i=0,ch=0; i<64; i++) {
-            if ((channel_layout & (1L<<i))) {
+        for (i = 0, ch = 0; i < 64; i++) {
+            if ((channel_layout & (1L << i))) {
                 const char *name = get_channel_name(i);
                 if (name) {
-                    if (ch>0) av_strlcat(buf, "|", buf_size);
+                    if (ch > 0)
+                        av_strlcat(buf, "|", buf_size);
                     av_strlcat(buf, name, buf_size);
                 }
                 ch++;
@@ -114,4 +132,12 @@ int av_get_channel_layout_nb_channels(int64_t channel_layout)
     for (count = 0; x; count++)
         x &= x-1; // unset lowest set bit
     return count;
+}
+
+int64_t av_get_default_channel_layout(int nb_channels) {
+    int i;
+    for (i = 0; channel_layout_map[i].name; i++)
+        if (nb_channels == channel_layout_map[i].nb_channels)
+            return channel_layout_map[i].layout;
+    return 0;
 }

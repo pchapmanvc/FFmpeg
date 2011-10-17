@@ -19,9 +19,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-/* needed for usleep() */
-#define _XOPEN_SOURCE 600
 #include <unistd.h>
+
 #include "libavutil/avstring.h"
 #include "libavutil/opt.h"
 #include "os_support.h"
@@ -61,11 +60,11 @@ URLProtocol *av_protocol_next(URLProtocol *p)
 
 const char *avio_enum_protocols(void **opaque, int output)
 {
-    URLProtocol **p = opaque;
-    *p = *p ? (*p)->next : first_protocol;
-    if (!*p) return NULL;
-    if ((output && (*p)->url_write) || (!output && (*p)->url_read))
-        return (*p)->name;
+    URLProtocol *p = *opaque;
+    p = p ? p->next : first_protocol;
+    if (!p) return NULL;
+    if ((output && p->url_write) || (!output && p->url_read))
+        return p->name;
     return avio_enum_protocols(opaque, output);
 }
 

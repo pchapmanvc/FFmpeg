@@ -36,6 +36,7 @@ const PixelFormatTag ff_raw_pix_fmt_tags[] = {
     { PIX_FMT_YUV411P, MKTAG('Y', '4', '1', 'B') },
     { PIX_FMT_YUV422P, MKTAG('Y', '4', '2', 'B') },
     { PIX_FMT_YUV422P, MKTAG('P', '4', '2', '2') },
+    { PIX_FMT_YUV422P, MKTAG('Y', 'V', '1', '6') },
     /* yuvjXXX formats are deprecated hacks specific to libav*,
        they are identical to yuvXXX  */
     { PIX_FMT_YUVJ420P, MKTAG('I', '4', '2', '0') }, /* Planar formats */
@@ -44,7 +45,7 @@ const PixelFormatTag ff_raw_pix_fmt_tags[] = {
     { PIX_FMT_YUVJ422P, MKTAG('Y', '4', '2', 'B') },
     { PIX_FMT_YUVJ422P, MKTAG('P', '4', '2', '2') },
     { PIX_FMT_GRAY8,    MKTAG('Y', '8', '0', '0') },
-    { PIX_FMT_GRAY8,    MKTAG(' ', ' ', 'Y', '8') },
+    { PIX_FMT_GRAY8,    MKTAG('Y', '8', ' ', ' ') },
 
     { PIX_FMT_YUYV422, MKTAG('Y', 'U', 'Y', '2') }, /* Packed formats */
     { PIX_FMT_YUYV422, MKTAG('Y', '4', '2', '2') },
@@ -122,7 +123,7 @@ const PixelFormatTag ff_raw_pix_fmt_tags[] = {
     { PIX_FMT_UYVY422, MKTAG('A', 'V', 'U', 'I') }, /* FIXME merge both fields */
     { PIX_FMT_YUYV422, MKTAG('y', 'u', 'v', '2') },
     { PIX_FMT_YUYV422, MKTAG('y', 'u', 'v', 's') },
-    { PIX_FMT_PAL8,    MKTAG('W', 'R', 'A', 'W') },
+    { PIX_FMT_YUYV422, MKTAG('D', 'V', 'O', 'O') }, /* Digital Voodoo SD 8 Bit */
     { PIX_FMT_RGB555LE,MKTAG('L', '5', '5', '5') },
     { PIX_FMT_RGB565LE,MKTAG('L', '5', '6', '5') },
     { PIX_FMT_RGB565BE,MKTAG('B', '5', '6', '5') },
@@ -135,6 +136,7 @@ const PixelFormatTag ff_raw_pix_fmt_tags[] = {
 
     /* special */
     { PIX_FMT_RGB565LE,MKTAG( 3 ,  0 ,  0 ,  0 ) }, /* flipped RGB565LE */
+    { PIX_FMT_YUV444P, MKTAG('Y', 'V', '2', '4') }, /* YUV444P, swapped UV */
 
     { PIX_FMT_NONE, 0 },
 };

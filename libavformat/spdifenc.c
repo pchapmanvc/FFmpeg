@@ -220,7 +220,7 @@ static int spdif_header_dts4(AVFormatContext *s, AVPacket *pkt, int core_size,
     }
 
     ctx->out_bytes   = sizeof(dtshd_start_code) + 2 + pkt_size;
-    ctx->length_code = ctx->out_bytes;
+    ctx->length_code = (pkt_size & ~0xf) + 0x18;
 
     av_fast_malloc(&ctx->hd_buf, &ctx->hd_buf_size, ctx->out_bytes);
     if (!ctx->hd_buf)
@@ -518,13 +518,13 @@ static int spdif_write_packet(struct AVFormatContext *s, AVPacket *pkt)
     }
 
     if (ctx->extra_bswap ^ (ctx->spdif_flags & SPDIF_FLAG_BIGENDIAN)) {
-    avio_write(s->pb, ctx->out_buf, ctx->out_bytes & ~1);
+        avio_write(s->pb, ctx->out_buf, ctx->out_bytes & ~1);
     } else {
-    av_fast_malloc(&ctx->buffer, &ctx->buffer_size, ctx->out_bytes + FF_INPUT_BUFFER_PADDING_SIZE);
-    if (!ctx->buffer)
-        return AVERROR(ENOMEM);
-    ff_spdif_bswap_buf16((uint16_t *)ctx->buffer, (uint16_t *)ctx->out_buf, ctx->out_bytes >> 1);
-    avio_write(s->pb, ctx->buffer, ctx->out_bytes & ~1);
+        av_fast_malloc(&ctx->buffer, &ctx->buffer_size, ctx->out_bytes + FF_INPUT_BUFFER_PADDING_SIZE);
+        if (!ctx->buffer)
+            return AVERROR(ENOMEM);
+        ff_spdif_bswap_buf16((uint16_t *)ctx->buffer, (uint16_t *)ctx->out_buf, ctx->out_bytes >> 1);
+        avio_write(s->pb, ctx->buffer, ctx->out_bytes & ~1);
     }
 
     /* a final lone byte has to be MSB aligned */
@@ -541,16 +541,15 @@ static int spdif_write_packet(struct AVFormatContext *s, AVPacket *pkt)
 }
 
 AVOutputFormat ff_spdif_muxer = {
-    "spdif",
-    NULL_IF_CONFIG_SMALL("IEC 61937 (used on S/PDIF - IEC958)"),
-    NULL,
-    "spdif",
-    sizeof(IEC61937Context),
-    CODEC_ID_AC3,
-    CODEC_ID_NONE,
-    spdif_write_header,
-    spdif_write_packet,
-    spdif_write_trailer,
+    .name              = "spdif",
+    .long_name         = NULL_IF_CONFIG_SMALL("IEC 61937 (used on S/PDIF - IEC958)"),
+    .extensions        = "spdif",
+    .priv_data_size    = sizeof(IEC61937Context),
+    .audio_codec       = CODEC_ID_AC3,
+    .video_codec       = CODEC_ID_NONE,
+    .write_header      = spdif_write_header,
+    .write_packet      = spdif_write_packet,
+    .write_trailer     = spdif_write_trailer,
     .flags = AVFMT_NOTIMESTAMPS,
     .priv_class = &class,
 };

@@ -186,7 +186,6 @@ static int decode_dds1(uint8_t *frame, int width, int height,
 static int decode_bdlt(uint8_t *frame, int width, int height,
                        const uint8_t *src, const uint8_t *src_end)
 {
-    const uint8_t *frame_end = frame + width * height;
     uint8_t *line_ptr;
     int count, lines, segments;
 
@@ -385,14 +384,13 @@ static av_cold int dfa_decode_end(AVCodecContext *avctx)
 }
 
 AVCodec ff_dfa_decoder = {
-    "dfa",
-    AVMEDIA_TYPE_VIDEO,
-    CODEC_ID_DFA,
-    sizeof(DfaContext),
-    dfa_decode_init,
-    NULL,
-    dfa_decode_end,
-    dfa_decode_frame,
-    CODEC_CAP_DR1,
+    .name           = "dfa",
+    .type           = AVMEDIA_TYPE_VIDEO,
+    .id             = CODEC_ID_DFA,
+    .priv_data_size = sizeof(DfaContext),
+    .init           = dfa_decode_init,
+    .close          = dfa_decode_end,
+    .decode         = dfa_decode_frame,
+    .capabilities   = CODEC_CAP_DR1,
     .long_name = NULL_IF_CONFIG_SMALL("Chronomaster DFA"),
 };

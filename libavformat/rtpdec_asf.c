@@ -107,13 +107,16 @@ int ff_wms_parse_sdp_a_line(AVFormatContext *s, const char *p)
                    "Failed to fix invalid RTSP-MS/ASF min_pktsize\n");
         init_packetizer(&pb, buf, len);
         if (rt->asf_ctx) {
-            av_close_input_stream(rt->asf_ctx);
+            av_close_input_file(rt->asf_ctx);
             rt->asf_ctx = NULL;
         }
-        ret = av_open_input_stream(&rt->asf_ctx, &pb, "", &ff_asf_demuxer, NULL);
+        if (!(rt->asf_ctx = avformat_alloc_context()))
+            return AVERROR(ENOMEM);
+        rt->asf_ctx->pb      = &pb;
+        ret = avformat_open_input(&rt->asf_ctx, "", &ff_asf_demuxer, NULL);
         if (ret < 0)
             return ret;
-        av_metadata_copy(&s->metadata, rt->asf_ctx->metadata, 0);
+        av_dict_copy(&s->metadata, rt->asf_ctx->metadata, 0);
         rt->asf_pb_pos = avio_tell(&pb);
         av_free(buf);
         rt->asf_ctx->pb = NULL;
@@ -230,8 +233,14 @@ static int asfrtp_parse_packet(AVFormatContext *s, PayloadContext *asf,
 
                 int cur_len = start_off + len_off - off;
                 int prev_len = out_len;
+                void *newmem;
                 out_len += cur_len;
-                asf->buf = av_realloc(asf->buf, out_len);
+                if (FFMIN(cur_len, len - off) < 0)
+                    return -1;
+                newmem = av_realloc(asf->buf, out_len);
+                if (!newmem)
+                    return -1;
+                asf->buf = newmem;
                 memcpy(asf->buf + prev_len, buf + off,
                        FFMIN(cur_len, len - off));
                 avio_skip(pb, cur_len);

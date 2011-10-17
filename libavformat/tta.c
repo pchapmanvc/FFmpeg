@@ -22,6 +22,7 @@
 #include "libavcodec/get_bits.h"
 #include "avformat.h"
 #include "id3v1.h"
+#include "libavutil/dict.h"
 
 typedef struct {
     int totalframes, currentframe;
@@ -43,7 +44,7 @@ static int tta_read_header(AVFormatContext *s, AVFormatParameters *ap)
     int i, channels, bps, samplerate, datalen, framelen;
     uint64_t framepos, start_offset;
 
-    if (!av_metadata_get(s->metadata, "", NULL, AV_METADATA_IGNORE_SUFFIX))
+    if (!av_dict_get(s->metadata, "", NULL, AV_DICT_IGNORE_SUFFIX))
         ff_id3v1_read(s);
 
     start_offset = avio_tell(s->pb);
@@ -136,21 +137,21 @@ static int tta_read_seek(AVFormatContext *s, int stream_index, int64_t timestamp
     int index = av_index_search_timestamp(st, timestamp, flags);
     if (index < 0)
         return -1;
+    if (avio_seek(s->pb, st->index_entries[index].pos, SEEK_SET) < 0)
+        return -1;
 
     c->currentframe = index;
-    avio_seek(s->pb, st->index_entries[index].pos, SEEK_SET);
 
     return 0;
 }
 
 AVInputFormat ff_tta_demuxer = {
-    "tta",
-    NULL_IF_CONFIG_SMALL("True Audio"),
-    sizeof(TTAContext),
-    tta_probe,
-    tta_read_header,
-    tta_read_packet,
-    NULL,
-    tta_read_seek,
+    .name           = "tta",
+    .long_name      = NULL_IF_CONFIG_SMALL("True Audio"),
+    .priv_data_size = sizeof(TTAContext),
+    .read_probe     = tta_probe,
+    .read_header    = tta_read_header,
+    .read_packet    = tta_read_packet,
+    .read_seek      = tta_read_seek,
     .extensions = "tta",
 };

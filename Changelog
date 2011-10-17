@@ -1,21 +1,74 @@
 Entries are sorted chronologically from oldest to youngest within each release,
 releases are sorted from youngest to oldest.
 
+version next:
 
-version <next>:
+- openal input device added
+- boxblur filter added
+- BWF muxer
+- Flash Screen Video 2 decoder
+- lavfi input device added
+- added avconv, which is almost the same for now, except
+for a few incompatible changes in the options, which will hopefully make them
+easier to use. The changes are:
+    * -newvideo/-newaudio/-newsubtitle are gone, because they were redundant and
+      worked in a nonstandard way. -map is sufficient to add streams to output
+      files.
+    * -map now has slightly different and more powerful syntax.
+        + it's possible to specify stream type. E.g. -map 0:a:2 means 'third
+          audio stream'.
+        + omitting the stream index now maps all the streams of the given
+          type, not just the first. E.g. -map 0:s maps all the subtitle streams.
+        + colons (':') are used to separate file index/stream type/stream
+          index. Comma (',') is used to separate the sync stream. This is done
+          for consistency with other options.
+        + since -map can now match multiple streams, negative mappings were
+          introduced. Negative mappings disable some streams from an already
+          defined map. E.g. '-map 0 -map -0:a:1' means 'map everything except
+          for the second audio stream'.
+    * -vcodec/-acodec/-scodec are replaced by -c (or -codec), which
+      allows to precisely specify target stream(s) consistently with other
+      options. E.g. '-c:v libx264' sets the codec for all video streams,
+      '-c:a:0 libvorbis' sets the codec for the first audio stream and '-c
+      copy' copies all the streams.
+    * It is now possible to precisely specify which stream should an AVOption
+      apply to. See the manual for detailed explanation.
+    * -map_chapters now takes only an input file index and applies to the next
+      output file. This is consistent with how all the other options work.
+    * -map_metadata now takes only an input metadata specifier and applies to
+      the next output file. Output metadata specifier is now part of the option
+      name, similarly to the AVOptions/map/codec feature above.
+    * Presets in avconv are disabled, because only libx264 used them and
+      presets for libx264 can now be specified using a private option
+      '-preset <presetname>'.
+    * -intra option was removed, it's equivalent to -g 0.
+- XMV demuxer
+- LOAS demuxer
+- ashowinfo filter added
+- Windows Media Image decoder
+- amovie source added
+- LATM muxer/demuxer
+- Speex encoder via libspeex
+- JSON output in ffprobe
+- WTV muxer
+- Optional C++ Support (needed for libstagefright)
+- H.264 Decoding on Android via Stagefright
+- Prores decoder
+- BIN/XBIN/ADF/IDF text file decoder
+- aconvert audio filter added
+- audio support to lavfi input device added
+- libcdio-paranoia input device for audio CD grabbing
+- Apple ProRes decoder
+- CELT in Ogg demuxing
+- G.723.1 demuxer and decoder
+- libmodplug support (--enable-libmodplug)
+- VC-1 interlaced decoding
+
+
+version 0.8:
+
 
 - many many things we forgot because we rather write code than changelogs
-- libmpcodecs video filter support (3 times as many filters than before)
-- mpeg2 aspect ratio dection fixed
-- libxvid aspect pickiness fixed
-- Frame multithreaded decoding
-- Lots of deprecated API cruft removed
-- fft and imdct optimizations for AVX (Sandy Bridge) processors
-- showinfo filter added
-
-
-version 0.7_beta1:
-
 - WebM support in Matroska de/muxer
 - low overhead Ogg muxing
 - MMS-TCP support
@@ -23,6 +76,7 @@ version 0.7_beta1:
 - Demuxer for On2's IVF format
 - Pictor/PC Paint decoder
 - HE-AAC v2 decoder
+- HE-AAC v2 encoding with libaacplus
 - libfaad2 wrapper removed
 - DTS-ES extension (XCh) decoding support
 - native VP8 decoder
@@ -34,7 +88,7 @@ version 0.7_beta1:
 - RTP depacketization of QDM2
 - ANSI/ASCII art playback system
 - Lego Mindstorms RSO de/muxer
-- libavcore added
+- libavcore added (and subsequently removed)
 - SubRip subtitle file muxer and demuxer
 - Chinese AVS encoding via libxavs
 - ffprobe -show_packets option added
@@ -64,10 +118,10 @@ version 0.7_beta1:
 - demuxer for receiving raw rtp:// URLs without an SDP description
 - single stream LATM/LOAS decoder
 - setpts filter added
-- Win64 support for optimized asm functions
+- Win64 support for optimized x86 assembly functions
 - MJPEG/AVI1 to JPEG/JFIF bitstream filter
 - ASS subtitle encoder and decoder
-- IEC 61937 encapsulation for E-AC3, TrueHD, DTS-HD (for HDMI passthrough)
+- IEC 61937 encapsulation for E-AC-3, TrueHD, DTS-HD (for HDMI passthrough)
 - overlay filter added
 - rename aspect filter to setdar, and pixelaspect to setsar
 - IEC 61937 demuxer
@@ -102,6 +156,37 @@ version 0.7_beta1:
 - AMR-WB encoding via libvo-amrwbenc
 - xWMA demuxer
 - Mobotix MxPEG decoder
+- VP8 frame-multithreading
+- NEON optimizations for VP8
+- Lots of deprecated API cruft removed
+- fft and imdct optimizations for AVX (Sandy Bridge) processors
+- showinfo filter added
+- SMPTE 302M AES3 audio decoder
+- Apple Core Audio Format muxer
+- 9bit and 10bit per sample support in the H.264 decoder
+- 9bit and 10bit FFV1 encoding / decoding
+- split filter added
+- select filter added
+- sdl output device added
+- libmpcodecs video filter support (3 times as many filters than before)
+- mpeg2 aspect ratio dection fixed
+- libxvid aspect pickiness fixed
+- Frame multithreaded decoding
+- E-AC-3 audio encoder
+- ac3enc: add channel coupling support
+- floating-point sample format support to the ac3, eac3, dca, aac, and vorbis decoders.
+- H264/MPEG frame-level multi-threading
+- All av_metadata_* functions renamed to av_dict_* and moved to libavutil
+- 4:4:4 H.264 decoding support
+- 10-bit H.264 optimizations for x86
+- lut, lutrgb, and lutyuv filters added
+- buffersink libavfilter sink added
+- Bump libswscale for recently reported ABI break
+
+
+version 0.7:
+
+- all the changes for 0.8, but keeping API/ABI compatibility with the 0.6 release
 
 
 version 0.6:

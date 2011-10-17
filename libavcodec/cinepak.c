@@ -336,7 +336,8 @@ static int cinepak_decode (CinepakContext *s)
              * If the frame header is followed by the bytes FE 00 00 06 00 00 then
              * this is probably one of the two known files that have 6 extra bytes
              * after the frame header. Else, assume 2 extra bytes. */
-            if ((s->data[10] == 0xFE) &&
+            if (s->size >= 16 &&
+                (s->data[10] == 0xFE) &&
                 (s->data[11] == 0x00) &&
                 (s->data[12] == 0x00) &&
                 (s->data[13] == 0x06) &&
@@ -354,6 +355,8 @@ static int cinepak_decode (CinepakContext *s)
     if (num_strips > MAX_STRIPS)
         num_strips = MAX_STRIPS;
 
+    s->frame.key_frame = 0;
+
     for (i=0; i < num_strips; i++) {
         if ((s->data + 12) > eod)
             return -1;
@@ -363,6 +366,9 @@ static int cinepak_decode (CinepakContext *s)
         s->strips[i].x1 = 0;
         s->strips[i].y2 = y0 + AV_RB16 (&s->data[8]);
         s->strips[i].x2 = s->avctx->width;
+
+        if (s->strips[i].id == 0x10)
+            s->frame.key_frame = 1;
 
         strip_size = AV_RB24 (&s->data[1]) - 12;
         s->data   += 12;
@@ -404,6 +410,7 @@ static av_cold int cinepak_decode_init(AVCodecContext *avctx)
         avctx->pix_fmt = PIX_FMT_PAL8;
     }
 
+    avcodec_get_frame_defaults(&s->frame);
     s->frame.data[0] = NULL;
 
     return 0;
@@ -459,14 +466,13 @@ static av_cold int cinepak_decode_end(AVCodecContext *avctx)
 }
 
 AVCodec ff_cinepak_decoder = {
-    "cinepak",
-    AVMEDIA_TYPE_VIDEO,
-    CODEC_ID_CINEPAK,
-    sizeof(CinepakContext),
-    cinepak_decode_init,
-    NULL,
-    cinepak_decode_end,
-    cinepak_decode_frame,
-    CODEC_CAP_DR1,
+    .name           = "cinepak",
+    .type           = AVMEDIA_TYPE_VIDEO,
+    .id             = CODEC_ID_CINEPAK,
+    .priv_data_size = sizeof(CinepakContext),
+    .init           = cinepak_decode_init,
+    .close          = cinepak_decode_end,
+    .decode         = cinepak_decode_frame,
+    .capabilities   = CODEC_CAP_DR1,
     .long_name = NULL_IF_CONFIG_SMALL("Cinepak"),
 };

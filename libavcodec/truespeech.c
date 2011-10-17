@@ -33,13 +33,13 @@
  */
 typedef struct {
     /* input data */
-    int16_t vector[8];  //< input vector: 5/5/4/4/4/3/3/3
-    int offset1[2];     //< 8-bit value, used in one copying offset
-    int offset2[4];     //< 7-bit value, encodes offsets for copying and for two-point filter
-    int pulseoff[4];    //< 4-bit offset of pulse values block
-    int pulsepos[4];    //< 27-bit variable, encodes 7 pulse positions
-    int pulseval[4];    //< 7x2-bit pulse values
-    int flag;           //< 1-bit flag, shows how to choose filters
+    int16_t vector[8];  ///< input vector: 5/5/4/4/4/3/3/3
+    int offset1[2];     ///< 8-bit value, used in one copying offset
+    int offset2[4];     ///< 7-bit value, encodes offsets for copying and for two-point filter
+    int pulseoff[4];    ///< 4-bit offset of pulse values block
+    int pulsepos[4];    ///< 27-bit variable, encodes 7 pulse positions
+    int pulseval[4];    ///< 7x2-bit pulse values
+    int flag;           ///< 1-bit flag, shows how to choose filters
     /* temporary data */
     int filtbuf[146];   // some big vector used for storing filters
     int prevfilt[8];    // filter from previous frame
@@ -382,13 +382,11 @@ static int truespeech_decode_frame(AVCodecContext *avctx,
 }
 
 AVCodec ff_truespeech_decoder = {
-    "truespeech",
-    AVMEDIA_TYPE_AUDIO,
-    CODEC_ID_TRUESPEECH,
-    sizeof(TSContext),
-    truespeech_decode_init,
-    NULL,
-    NULL,
-    truespeech_decode_frame,
+    .name           = "truespeech",
+    .type           = AVMEDIA_TYPE_AUDIO,
+    .id             = CODEC_ID_TRUESPEECH,
+    .priv_data_size = sizeof(TSContext),
+    .init           = truespeech_decode_init,
+    .decode         = truespeech_decode_frame,
     .long_name = NULL_IF_CONFIG_SMALL("DSP Group TrueSpeech"),
 };

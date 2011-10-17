@@ -13,7 +13,7 @@
 
 @example
 @c man begin SYNOPSIS
-ffplay [options] @file{input_file}
+ffplay [options] [@file{input_file}]
 @c man end
 @end example
 
@@ -28,7 +28,7 @@ various FFmpeg APIs.
 @chapter Options
 @c man begin OPTIONS
 
-@include fftools-common-opts.texi
+@include avtools-common-opts.texi
 
 @section Main options
 
@@ -38,8 +38,9 @@ Force displayed width.
 @item -y @var{height}
 Force displayed height.
 @item -s @var{size}
-Set frame size (WxH or abbreviation), needed for videos which don't
-contain a header with the frame size like raw YUV.
+Set frame size (WxH or abbreviation), needed for videos which do
+not contain a header with the frame size like raw YUV.  This option
+has been deprecated in favor of private options, try -video_size.
 @item -an
 Disable audio.
 @item -vn
@@ -82,21 +83,20 @@ the input video.
 Use the option "-filters" to show all the available filters (including
 also sources and sinks).
 
+@item -i @var{input_file}
+Read @var{input_file}.
 @end table
 
 @section Advanced options
 @table @option
 @item -pix_fmt @var{format}
 Set pixel format.
+This option has been deprecated in favor of private options, try -pixel_format.
 @item -stats
 Show the stream duration, the codec parameters, the current position in
 the stream and the audio/video synchronisation drift.
-@item -debug
-Print specific debug info.
 @item -bug
 Work around bugs.
-@item -vismv
-Visualize motion vectors.
 @item -fast
 Non-spec-compliant optimizations.
 @item -genpts
@@ -134,6 +134,8 @@ Exit when video is done playing.
 Exit if any key is pressed.
 @item -exitonmousedown
 Exit if any mouse button is pressed.
+@item -codec:@var{stream_type}
+Force a specific decoder implementation
 @end table
 
 @section While playing
@@ -174,6 +176,7 @@ Seek to percentage in file corresponding to fraction of width.
 @c man end
 
 @include eval.texi
+@include decoders.texi
 @include demuxers.texi
 @include muxers.texi
 @include indevs.texi

@@ -34,30 +34,48 @@
 
 static int ff_h264_find_frame_end(H264Context *h, const uint8_t *buf, int buf_size)
 {
-    int i;
+    int i, j;
     uint32_t state;
     ParseContext *pc = &(h->s.parse_context);
+    int next_avc= h->is_avc ? 0 : buf_size;
+
 //printf("first %02X%02X%02X%02X\n", buf[0], buf[1],buf[2],buf[3]);
 //    mb_addr= pc->mb_addr - 1;
     state= pc->state;
     if(state>13)
         state= 7;
 
+    if(h->is_avc && !h->nal_length_size)
+        av_log(h->s.avctx, AV_LOG_ERROR, "AVC-parser: nal length size invalid\n");
+
     for(i=0; i<buf_size; i++){
+        if(i >= next_avc) {
+            int nalsize = 0;
+            i = next_avc;
+            for(j = 0; j < h->nal_length_size; j++)
+                nalsize = (nalsize << 8) | buf[i++];
+            if(nalsize <= 0 || nalsize > buf_size - i){
+                av_log(h->s.avctx, AV_LOG_ERROR, "AVC-parser: nal size %d remaining %d\n", nalsize, buf_size - i);
+                return buf_size;
+            }
+            next_avc= i + nalsize;
+            state= 5;
+        }
+
         if(state==7){
 #if HAVE_FAST_UNALIGNED
         /* we check i<buf_size instead of i+3/7 because its simpler
          * and there should be FF_INPUT_BUFFER_PADDING_SIZE bytes at the end
          */
 #    if HAVE_FAST_64BIT
-            while(i<buf_size && !((~*(const uint64_t*)(buf+i) & (*(const uint64_t*)(buf+i) - 0x0101010101010101ULL)) & 0x8080808080808080ULL))
+            while(i<next_avc && !((~*(const uint64_t*)(buf+i) & (*(const uint64_t*)(buf+i) - 0x0101010101010101ULL)) & 0x8080808080808080ULL))
                 i+=8;
 #    else
-            while(i<buf_size && !((~*(const uint32_t*)(buf+i) & (*(const uint32_t*)(buf+i) - 0x01010101U)) & 0x80808080U))
+            while(i<next_avc && !((~*(const uint32_t*)(buf+i) & (*(const uint32_t*)(buf+i) - 0x01010101U)) & 0x80808080U))
                 i+=4;
 #    endif
 #endif
-            for(; i<buf_size; i++){
+            for(; i<next_avc; i++){
                 if(!buf[i]){
                     state=2;
                     break;
@@ -89,15 +107,19 @@ static int ff_h264_find_frame_end(H264Context *h, const uint8_t *buf, int buf_si
         }
     }
     pc->state= state;
+    if(h->is_avc)
+        return next_avc;
     return END_NOT_FOUND;
 
 found:
     pc->state=7;
     pc->frame_start_found= 0;
+    if(h->is_avc)
+        return next_avc;
     return i-(state&5);
 }
 
-/*!
+/**
  * Parse NAL units of found picture and decode some basic information.
  *
  * @param s parser context.
@@ -117,7 +139,7 @@ static inline int parse_nal_units(AVCodecParserContext *s,
     const uint8_t *ptr;
 
     /* set some sane default values */
-    s->pict_type = FF_I_TYPE;
+    s->pict_type = AV_PICTURE_TYPE_I;
     s->key_frame = 0;
 
     h->s.avctx= avctx;
@@ -234,7 +256,7 @@ static inline int parse_nal_units(AVCodecParserContext *s,
         buf += consumed;
     }
     /* didn't find a picture! */
-    av_log(h->s.avctx, AV_LOG_ERROR, "missing picture in access unit\n");
+    av_log(h->s.avctx, AV_LOG_ERROR, "missing picture in access unit with size %d\n", buf_size);
     return -1;
 }
 
@@ -251,7 +273,13 @@ static int h264_parse(AVCodecParserContext *s,
         h->got_first = 1;
         if (avctx->extradata_size) {
             h->s.avctx = avctx;
-            ff_h264_decode_extradata(h);
+            // must be done like in decoder, otherwise opening the parser,
+            // letting it create extradata and then closing and opening again
+            // will cause has_b_frames to be always set.
+            // Note that estimate_timings_from_pts does exactly this.
+            if (!avctx->has_b_frames)
+                h->s.low_delay = 1;
+            ff_h264_decode_extradata(h, avctx->extradata, avctx->extradata_size);
         }
     }
 
@@ -272,6 +300,7 @@ static int h264_parse(AVCodecParserContext *s,
         }
     }
 
+    if(!h->is_avc){
     parse_nal_units(s, avctx, buf, buf_size);
 
     if (h->sei_cpb_removal_delay >= 0) {
@@ -286,6 +315,7 @@ static int h264_parse(AVCodecParserContext *s,
 
     if (s->flags & PARSER_FLAG_ONCE) {
         s->flags &= PARSER_FLAG_COMPLETE_FRAMES;
+    }
     }
 
     *poutbuf = buf;

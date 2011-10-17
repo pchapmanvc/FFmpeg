@@ -28,7 +28,7 @@ static int get_swf_tag(AVIOContext *pb, int *len_ptr)
     int tag, len;
 
     if (url_feof(pb))
-        return -1;
+        return AVERROR_EOF;
 
     tag = avio_rl16(pb);
     len = tag & 0x3f;
@@ -90,7 +90,7 @@ static int swf_read_packet(AVFormatContext *s, AVPacket *pkt)
         uint64_t pos = avio_tell(pb);
         tag = get_swf_tag(pb, &len);
         if (tag < 0)
-            return AVERROR(EIO);
+            return tag;
         if (tag == TAG_VIDEOSTREAM) {
             int ch_id = avio_rl16(pb);
             len -= 2;
@@ -136,8 +136,9 @@ static int swf_read_packet(AVFormatContext *s, AVPacket *pkt)
             ast->need_parsing = AVSTREAM_PARSE_FULL;
             sample_rate_code= (v>>2) & 3;
             if (!sample_rate_code)
-                return AVERROR(EIO);
-            ast->codec->sample_rate = 11025 << (sample_rate_code-1);
+                ast->codec->sample_rate = 5512;
+            else
+                ast->codec->sample_rate = 11025 << (sample_rate_code-1);
             av_set_pts_info(ast, 64, 1, ast->codec->sample_rate);
             len -= 4;
         } else if (tag == TAG_VIDEOFRAME) {
@@ -204,14 +205,13 @@ static int swf_read_packet(AVFormatContext *s, AVPacket *pkt)
     skip:
         avio_skip(pb, len);
     }
-    return 0;
 }
 
 AVInputFormat ff_swf_demuxer = {
-    "swf",
-    NULL_IF_CONFIG_SMALL("Flash format"),
-    sizeof(SWFContext),
-    swf_probe,
-    swf_read_header,
-    swf_read_packet,
+    .name           = "swf",
+    .long_name      = NULL_IF_CONFIG_SMALL("Flash format"),
+    .priv_data_size = sizeof(SWFContext),
+    .read_probe     = swf_probe,
+    .read_header    = swf_read_header,
+    .read_packet    = swf_read_packet,
 };
